@@ -47,12 +47,6 @@ modelling would be needed (forthcoming).
 
 I use daily S&P 500 closing prices from 1980 onwards. There are two main reasons for this long sample window.
 
-First, EVT relies on a sufficient number of tail observations. With roughly `{python} f"{n_years:.0f}"` years of daily data, the sample contains over `{python} f"{n_obs:,}"` returns and several hundred exceedances even at high thresholds, which gives the GPD estimates a comfortable basis.
-
-Second, the sample covers a wide range of structurally different crisis episodes — Black Monday (1987), the dot-com crash (2000–2002), the global financial crisis (2007–2009), the European sovereign debt crisis (2011), the COVID-19 shock (March 2020), and the 2022 inflation regime. This diversity makes the estimated tail behaviour less dependent on any single episode and arguably more representative of the kinds of extremes a risk manager has to anticipate.
-
-The main caveat is stationarity: over a window of this length, market microstructure, regulation, and the index composition itself have changed substantially, so strict stationarity is implausible for the raw return series. The GARCH pre-whitening step addresses part of this concern by absorbing time-varying volatility into the conditional variance, leaving the standardised residuals as the object on which the (much weaker) stationarity assumption is then imposed.
-
 ```{python}
 prices = yf.download("^GSPC", start="1980-01-01")[
     "Close"
@@ -71,6 +65,13 @@ axes[1].set_title("S&P 500 %-Returns")
 plt.tight_layout()
 plt.show()
 ```
+
+First, EVT relies on a sufficient number of tail observations. With roughly `{python} f"{n_years:.0f}"` years of daily data, the sample contains over `{python} f"{n_obs:,}"` returns and several hundred exceedances even at high thresholds, which gives the GPD estimates a comfortable basis.
+
+Second, the sample covers a wide range of structurally different crisis episodes — Black Monday (1987), the dot-com crash (2000–2002), the global financial crisis (2007–2009), the European sovereign debt crisis (2011), the COVID-19 shock (March 2020), and the 2022 inflation regime. This diversity makes the estimated tail behaviour less dependent on any single episode and arguably more representative of the kinds of extremes a risk manager has to anticipate.
+
+The main caveat is stationarity: over a window of this length, market microstructure, regulation, and the index composition itself have changed substantially, so strict stationarity is implausible for the raw return series. The GARCH pre-whitening step addresses part of this concern by absorbing time-varying volatility into the conditional variance, leaving the standardised residuals as the object on which the (much weaker) stationarity assumption is then imposed.
+
 
 ## Volatility-filtered POT-Analysis - Conditional Analysis
 ### Pre-Whitening
