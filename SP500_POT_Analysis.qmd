@@ -1,0 +1,595 @@
+---
+title: "POT-Implementation - S&P500 - naive vs. whitened"
+format: html
+---
+## Problem Statement and Objectives
+This project demonstrates how risk measure inference, based on POT-modelling, 
+is influenced by accounting for the dependence structure of time-series index data. 
+To illustrate this, two approaches are compared: the first whitens the data prior 
+to POT-analysis, i.e. it is preceded by a simple GARCH(1,1)-model. The second 
+approach does not account for this volatility-dependence structure. Based on the 
+results of the POT-model, $\text{VaR}_{\alpha}$ and $\text{ES}_{\alpha}$ are 
+calculated as risk measures in both cases. The measures are validated via backtesting 
+and evaluated using the Kupiec- and Christoffersen-Test. Finally, for both approaches, 
+a 10-day forecast is produced.
+
+## Preparation
+
+### Package-Loading
+
+```{python}
+import pandas as pd
+import numpy as np
+import pyextremes
+from pyextremes import EVA 
+from scipy.stats import chi2, genpareto
+import matplotlib.pyplot as plt
+import seaborn as sns 
+import pyextremes
+from arch import arch_model
+import yfinance as yf
+from multiprocessing import Pool
+from VaR_backtest_utils_correct import backtest_single, init_worker # git-repository
+```
+
+### Loading Data -  S&P500
+For this project I chose the S&P 500 Index. The rationale for using an index 
+is that it allows applying POT in a somewhat informative way for producing 
+$\text{VaR}_{\alpha}$ and $\text{ES}_{\alpha}$ estimates, whereas a single 
+stock doesn't capture how a portfolio behaves in the tails of the return 
+distribution. To address this more realistically, multivariate extreme value 
+modelling would be needed (forthcoming). 
+
+####  Choice of Sample Period
+
+I use daily S&P 500 closing prices from 1980 onwards. There are two main reasons for this long sample window.
+
+First, EVT relies on a sufficient number of tail observations. With roughly 46 years of daily data, the sample contains over 11,000 returns and several hundred exceedances even at high thresholds, which gives the GPD estimates a comfortable basis.
+
+Second, the sample covers a wide range of structurally different crisis episodes — Black Monday (1987), the dot-com crash (2000–2002), the global financial crisis (2007–2009), the European sovereign debt crisis (2011), the COVID-19 shock (March 2020), and the 2022 inflation regime. This diversity makes the estimated tail behaviour less dependent on any single episode and arguably more representative of the kinds of extremes a risk manager has to anticipate.
+
+The main caveat is stationarity: over a window of this length, market microstructure, regulation, and the index composition itself have changed substantially, so strict stationarity is implausible for the raw return series. The GARCH pre-whitening step addresses part of this concern by absorbing time-varying volatility into the conditional variance, leaving the standardised residuals as the object on which the (much weaker) stationarity assumption is then imposed.
+
+```{python}
+prices = yf.download("^GSPC", start="1980-01-01")["Close"]  # on single stocks Adj.Close
+returns_dec = prices.pct_change().dropna().squeeze()  # squeze for series format
+log_losses = -np.log(prices / prices.shift(1)).dropna().squeeze()
+
+
+fig, axes = plt.subplots(1, 2, figsize=(16, 5))
+axes[0].plot(prices.index, prices.values)
+axes[1].plot(returns_dec.index, returns_dec.values)
+axes[0].set_title("S&P 500 Price Devlopment")
+axes[1].set_title("S&P 500 %-Returns")
+plt.tight_layout()
+plt.show()
+```
+
+## Volatility-filtered POT-Analysis
+### Pre-Whitening
+
+Financial return series exhibit several well-known stylized facts: they are not iid, volatility varies over time, and extreme returns tend to cluster. This section shows how these features can be accounted for by pre-filtering the series with a GARCH model before applying POT analysis. A full treatment of GARCH modelling and autocorrelation diagnostics is given in a separate project (univariate and multivariate time series modelling (forthcoming)); here I only sketch the idea.
+
+The GARCH($p$,$q$) model is defined as
+
+$$
+X_t = \sigma_t Z_t, \qquad \sigma_t^2 = \alpha_0 + \sum_{i=1}^{p} \alpha_i X_{t-i}^2 + \sum_{j=1}^{q} \beta_j \sigma_{t-j}^2.
+$$
+
+The basic idea is that periods of high volatility persist through large values of either $|X_{t-i}|$ or $\sigma_{t-j}$. I use a simple GARCH(1,1), where persistence enters through $|X_{t-1}|$ and $\sigma_{t-1}$ only. Note that this does not restrict persistence to a single lag: through the recursive structure of $\sigma_t^2$, shocks from much earlier periods continue to propagate via $\sigma_{t-1}$.
+
+```{python}
+garch = arch_model(returns_dec*100, vol='GARCH', p=1, q=1)
+result = garch.fit(disp='off')
+std_resid = result.resid / result.conditional_volatility
+losses = -std_resid.dropna()
+```
+
+Although the model implicitly assumes a normal distribution for the innovations $Z_t$, this is not a concern for the subsequent analysis: the standardised residuals are clearly non-normal, and it is precisely those that feed into the POT step. For inference on $\operatorname{VaR}_\alpha$ and $\operatorname{ES}_\alpha$ we only rely on the conditional volatility $\hat{\sigma}_t$, so the normality assumption matters only insofar as it shapes the likelihood used to estimate the recursion parameters $\alpha_0$, $\alpha_1$, and $\beta_1$.
+
+While maximum likelihood estimation is generally only consistent under a correctly specified distribution, Bollerslev and Wooldridge (1992) showed that the Gaussian likelihood yields consistent estimates of the GARCH parameters even when $Z_t$ is not normal — this is the Quasi-Maximum-Likelihood (QML) result. The intuition is that the score of the Gaussian log-likelihood has mean zero as long as the conditional mean and variance are correctly specified; the shape of the innovation distribution beyond the first two conditional moments does not enter the first-order conditions. QML estimates are consistent but not efficient, which is reflected in larger standard errors. The `arch` package accounts for this by reporting Bollerslev–Wooldridge robust (sandwich) standard errors by default.
+
+### Choosing the Threshold $u$
+For the choice of the threshold $u$, I use `plot_mean_residual_life` and `plot_parameter_stability` from the `pyextremes` package.
+
+```{python}
+pyextremes.plot_mean_residual_life(losses)
+plt.show()
+```
+
+In theory, if the exceedances above $u$ follow a GPD, the mean excess function is linear in $u$:
+$$
+E[X - u \mid X > u] = \frac{\sigma_u + \xi u}{1 - \xi}.
+$$
+
+The mean-residual-life plot should therefore become approximately linear above a valid threshold. Here, linearity roughly holds for $u \gtrsim 2.0$. Beyond $u \approx 3.0$, the estimate becomes erratic and the confidence bands widen substantially, reflecting the small number of exceedances at such high levels. This suggests a threshold somewhere in the interval $[2.0, 3.0]$.
+
+To narrow this down, I check whether the GPD parameters are stable in this range. Under a correctly specified GPD above $u$, the shape $\xi$ should be constant, and so should the modified scale $\sigma^{*} = \sigma_u - \xi u$ (the scale $\sigma_u$ itself is expected to vary linearly with $u$ and is therefore not a useful stability criterion).
+
+```{python}
+pyextremes.plot_parameter_stability(losses)
+plt.show()
+```
+
+Both parameters are reasonably stable for $u \in [2.0, 2.5]$; beyond that, the variance of the estimators grows noticeably, likely due to the decreasing number of exceedances. The admissible range is thus $u \in [2.0, 2.5]$. Before fixing $u$, I check the number of exceedances at a few candidate levels:
+
+```{python}
+print(f"Exceedances at u = 2: {np.sum(losses > 2.0)}")
+print(f"Exceedances at u = 2.2: {np.sum(losses > 2.2)}")
+print(f"Exceedances at u = 2.5: {np.sum(losses > 2.5)}")
+```
+
+With roughly 270 exceedances at $u = 2.2$, the sample size is comfortable for GPD estimation while the threshold still lies within the range supported by the diagnostics.
+
+### POT Analysis
+
+I now fit a POT model to the standardised residuals from the GARCH filter, again using `pyextremes`. Parameter estimation is performed via MCMC using the `emcee` sampler, which provides the full posterior distribution of $(\xi, \sigma_u)$ rather than only point estimates. This allows for a proper quantification of parameter uncertainty and for constructing credible intervals on derived risk measures such as $\operatorname{VaR}_\alpha$ and $\operatorname{ES}_\alpha$. A Bayesian approach is also attractive here because GPD maximum likelihood estimates are known to have poor finite-sample properties, especially when $\xi$ is small or negative.
+
+Sampling is parallelised across the 200 walkers of the emcee ensemble using `Pool` from the `multiprocessing` package. The number of worker processes should be set according to the available CPU cores on your machine.
+
+```{python}
+model = EVA(data=losses)
+model.get_extremes(method="POT", threshold=2.2)
+with Pool(10) as pool:  # Adjust n_workers to the number of available CPU cores
+    model.fit_model(
+        distribution="genpareto",
+        model="Emcee",
+        n_walkers=200,
+        n_samples=2000,
+        pool=pool
+    )
+```
+
+Having fitted the model, I look at the diagnostic plots and check whether the assumption of the model match the data.
+
+```{python}
+model.plot_diagnostic()
+```
+
+The fit is reasonable overall: most data points in the Q-Q plot align closely with the theoretical quantiles ($R^2 = 0.979$), and the fitted density matches the empirical histogram well. A few irregularities appear in the upper tail, and one observation — corresponding to an exceptionally large loss — lies clearly above the reference line, indicating that the model underestimates this single extreme. This is not unexpected: isolated outliers of this magnitude are a known limitation of any stationary GPD fit to financial returns.
+
+The P-P plot is almost perfect ($R^2 = 1.000$), but this is of limited diagnostic value for extreme value models: P-P plots compress the tails, so they are insensitive to exactly the region that matters most here. The Q-Q plot is the more informative diagnostic. The reported $p$-values refer to the significance of the correlation between empirical and theoretical quantiles/probabilities (so $p = 0.000$ indicates a highly significant linear relationship, not rejection of the fit).
+
+Overall, the model appears adequate for risk measurement at moderately extreme quantiles, with the caveat that individual outliers beyond the bulk of the tail may be underestimated.
+
+Next, I check for anomalies in chain mixing and inspect the posterior distribution of the parameters.
+
+```{python}
+model.plot_trace()
+model.plot_corner()
+```
+
+The chains mix well: both parameters fluctuate around a stable level from early on, with no drift, stickiness, or visible regime changes. The posterior of $\xi$ is reasonably concentrated (roughly $\xi \in [0.075, 0.58]$), smooth, and unimodal, with no outlying mass. The corner plot reveals a clear negative correlation between $\xi$ and $\sigma$, which is a well-known feature of the GPD likelihood — the two parameters are not orthogonal, so estimation uncertainty in one partly compensates for the other.
+
+```{python}
+trace = model.model.trace
+burn_in = trace.shape[1] //2
+samples = trace[:, burn_in:, :].reshape(-1, trace.shape[2])
+s_xi = samples.mean(axis=0)
+print(f"\\xi (posterior mean): {s_xi[0]}")
+```
+
+With $\hat{\xi} \approx 0.25$, the implied tail index is $\alpha = 1/\xi \approx 4$. This means that moments of order $k < 4$ exist, while the **fourth moment (kurtosis) is already infinite — a plausible result for daily equity losses and consistent with the heavy-tailed behaviour typically observed in financial return series.
+
+### Posterior of $\operatorname{VaR}_{0.99}$ and $\operatorname{ES}_{0.99}$
+
+Having obtained the GPD parameters from the POT model, I now compute the 99%-VaR and 99%-ES. Following McNeil et al. (2015), VaR is given by
+$$
+\operatorname{VaR}_\alpha = u + \frac{\beta}{\xi}\left(\left(\frac{1-\alpha}{\bar{F}(u)}\right)^{-\xi} - 1\right),
+$$
+where $\xi$ and $\beta$ are the shape and scale parameters of the fitted GPD. The tail probability $\bar{F}(u) = P(X > u)$ is estimated empirically by
+$$
+\hat{\bar{F}}(u) = \frac{N_u}{n},
+$$
+the proportion of observations exceeding the threshold $u$. Expected shortfall follows as
+$$
+\operatorname{ES}_\alpha = \frac{\operatorname{VaR}_\alpha + \beta - \xi u}{1 - \xi}, \qquad \xi < 1,
+$$
+where the condition $\xi < 1$ ensures that $\operatorname{ES}_\alpha$ is finite. With $\hat{\xi} \approx 0.25$ this is comfortably satisfied.
+
+Since the model was estimated via `emcee`, I propagate the full posterior of $(\xi, \beta)$ through both formulas instead of relying on point estimates only, which allows uncertainty to be reflected in credible intervals for $\operatorname{VaR}_\alpha$ and $\operatorname{ES}_\alpha$.
+
+```{python}
+u = 2.2
+n_u = len(model.extremes)
+n = len(losses)
+f_bar_u = n_u / n
+alpha = 0.99
+
+xi, beta = samples[:, 0], samples[:, 1]
+
+VaR_z = u + (beta / xi) * (((1 - alpha) / f_bar_u) ** (-xi) - 1)
+ES_z = (VaR_z + beta - xi * u) / (1 - xi)
+
+forecast = result.forecast(horizon=1, reindex=False)
+sigma_next = np.sqrt(forecast.variance.values[-1, 0])
+
+VaR_posterior = VaR_z * sigma_next
+ES_posterior = ES_z * sigma_next
+
+print(f"Next-day VaR_{alpha}: {np.median(VaR_posterior):.2f}% "
+      f"[{np.percentile(VaR_posterior, 2.5):.2f}%, "
+      f"{np.percentile(VaR_posterior, 97.5):.2f}%]")
+
+print(f"Next-day ES_{alpha}: {np.median(ES_posterior):.2f}% "
+      f"[{np.percentile(ES_posterior, 2.5):.2f}%, "
+      f"{np.percentile(ES_posterior, 97.5):.2f}%]")
+```
+
+## Backtesting
+To assess how well the conditional EVT model performs out-of-sample, I run a rolling-window backtest of the 99% one-day VaR. For each day $t \geq 1000$ in the sample, the procedure is:
+
+1. Re-fit a GARCH(1,1) model on the most recent 1000 returns;
+2. Extract the standardised residuals and fit a GPD via maximum likelihood to the exceedances above their 95% empirical quantile;
+3. Obtain the one-step-ahead conditional volatility $\hat{\sigma}_{t+1}$ from the GARCH forecast;
+4. Compute $\operatorname{VaR}^z_{0.99}$ from the GPD parameters and rescale to $\operatorname{VaR}_{t+1} = \hat{\sigma}_{t+1} \cdot \operatorname{VaR}^z_{0.99}$;
+5. Record a violation if the realised loss at $t+1$ exceeds $\operatorname{VaR}_{t+1}$.
+
+This produces a sequence of out-of-sample VaR forecasts and corresponding violation indicators that can be evaluated with standard backtesting procedures (Kupiec, Christoffersen).
+
+A few design choices deserve comment. The rolling window of 1000 days (~4 trading years) balances estimation stability against responsiveness to changing market regimes. The threshold is set to the rolling 95% quantile rather than a fixed value, since the scale of the standardised residuals can drift slightly between windows. GPD parameters are estimated by MLE rather than MCMC: with several thousand re-fits, full Bayesian inference would be computationally prohibitive, and only the point estimate of $\operatorname{VaR}^z$ is needed to determine whether a violation occurred. Iterations with fewer than 20 exceedances are flagged as missing and excluded from the evaluation. Computation is parallelised across cores using `multiprocessing.Pool`; the worker initialiser pattern is required on macOS where the spawn start method does not inherit module-level state.
+
+The rolling-window logic is implemented in `VaR_backtest_utils_correct.py` (see repository); the cell below executes the backtest.
+
+```{python}
+window = 1000
+with Pool(
+    10,
+    initializer=init_worker,
+    initargs=(
+        returns_dec.values,
+        window,
+    ),
+) as pool:
+    results = pool.map(backtest_single, range(window, len(returns_dec)))
+
+var_estimates, violations = zip(*results)
+var_estimates = np.array(var_estimates)
+violations = np.array(violations)
+
+valid = ~np.isnan(var_estimates)
+violations_clean = violations[valid]
+var_clean = var_estimates[valid]
+```
+
+### Results
+
+```{python}
+n_obs = len(violations_clean)
+n_viol = violations_clean.sum()
+print(f"Violations: {n_viol}/{n_obs} ({n_viol / n_obs:.4f})")
+print(f"Expected: {n_obs * 0.01:.0f} ({0.01})")
+
+# --- Kupiec-Test ---
+p0 = 0.01
+p_hat = n_viol / n_obs
+LR = -2 * (
+    n_viol * np.log(p0)
+    + (n_obs - n_viol) * np.log(1 - p0)
+    - n_viol * np.log(p_hat)
+    - (n_obs - n_viol) * np.log(1 - p_hat)
+)
+p_value = 1 - chi2.cdf(LR, df=1)
+print(f"Kupiec: LR={LR:.3f}, p={p_value:.4f}")
+
+dates_test = returns_dec.index[window:][valid]
+actual_losses = -returns_dec.values[window:][valid]
+
+# --- Christoffersen-Test ---
+def christoffersen(violations, p0=0.01):
+    v = np.asarray(violations).astype(int)
+    n00 = ((v[:-1]==0)&(v[1:]==0)).sum()
+    n01 = ((v[:-1]==0)&(v[1:]==1)).sum()
+    n10 = ((v[:-1]==1)&(v[1:]==0)).sum()
+    n11 = ((v[:-1]==1)&(v[1:]==1)).sum()
+    
+    pi01, pi11 = n01/(n00+n01), n11/(n10+n11)
+    pi = (n01+n11)/(n00+n01+n10+n11)
+    
+    LR_ind = -2*((n00+n10)*np.log(1-pi) + (n01+n11)*np.log(pi)
+                 - n00*np.log(1-pi01) - n01*np.log(pi01)
+                 - n10*np.log(1-pi11) - n11*np.log(pi11))
+    
+    return LR_ind, 1 - chi2.cdf(LR_ind, df=1)
+
+LR_ind, p_ind = christoffersen(violations_clean)
+LR_cc = LR + LR_ind  # LR = Kupiec von oben
+p_cc = 1 - chi2.cdf(LR_cc, df=2)
+print(f"Christoffersen Ind: LR={LR_ind:.3f}, p={p_ind:.4f}")
+print(f"Christoffersen CC:  LR={LR_cc:.3f}, p={1-chi2.cdf(LR_cc, df=2):.4f}")
+
+plt.figure(figsize=(14, 5))
+plt.plot(dates_test, actual_losses, alpha=0.4, lw=0.5, color="steelblue")
+plt.plot(dates_test, var_clean, color="red", lw=0.8, label="VaR 99%")
+plt.scatter(
+    dates_test[violations_clean],
+    actual_losses[violations_clean],
+    color="darkred",
+    s=10,
+    zorder=5,
+    label=f"Violations ({n_viol})",
+)
+plt.legend()
+plt.title("VaR Backtesting — GARCH + Rolling POT")
+plt.ylabel("Loss (simple return)")
+plt.show()
+```
+
+#### Discussion
+
+The backtest covers `{python} f"{n_obs:,}"` out-of-sample days from 1984 to 2026, with `{python} n_viol` recorded violations of the 99% VaR.
+
+**Unconditional coverage.** With an empirical violation rate of `{python} f"{n_viol/n_obs*100:.2f}"`% against a nominal 1%, the Kupiec test does not reject the null of correct unconditional coverage ($LR = 0.10$, $p = 0.75$). The conditional EVT model produces almost exactly the right number of tail violations over four decades, including periods as different as the 1987 crash, the dot-com era, the global financial crisis, the eurozone crisis, and the COVID-19 shock.
+
+**Independence.** The Christoffersen independence test rejects the null at the 5% level ($LR = 4.51$, $p = 0.034$). Visual inspection of the violation series confirms this: violations cluster around major crisis periods, particularly 1987, 1998 (LTCM/Asian crisis), 2007–2009, and March 2020. Although GARCH(1,1) substantially reduces volatility-induced clustering relative to a static model, residual dependence remains — likely because GARCH(1,1) does not capture the leverage effect (negative shocks raising volatility more than positive ones), assumes Gaussian innovations even though the standardised residuals are clearly heavy-tailed, and uses a rather simple lag structure.
+
+**Conditional coverage.** The combined test is borderline but not rejected at the 5% level ($LR = 4.61$, $p = 0.10$). Overall, the model captures the right number of tail events but with slightly clustered timing.
+
+**Practical assessment.** From a risk-management perspective the result is encouraging: a violation rate within 3% of the nominal level over a 42-year out-of-sample window is a strong outcome, especially considering that the model was estimated on rolling windows of only 1000 days and never had access to future information. The clustering of violations is a real but interpretable limitation. Natural refinements that should reduce it are an asymmetric GARCH specification (e.g. GJR-GARCH or EGARCH) and a heavier-tailed innovation distribution (Student-$t$ or skewed-$t$). Both are straightforward extensions and will be explored in follow-up work.
+
+### 10-Day Forecast
+
+Standard scaling (`VaR_z · σ_h`) implicitly assumes that the *h*-day standardised return has the same distribution as the 1-day innovation. Under iid-like residuals this is fine for the daily VaR path (each horizon is still a 1-day quantile, only σh\sigma_h
+σh​ changes), but not for the cumulative 10-day loss: a sum of hh
+h heavy-tailed variables drifts toward a thinner-tailed limit (CLT), so cumulative scaling overstates the true tail. To handle this consistently I simulate forward paths using filtered historical simulation (McNeil & Frey, 2000): the GARCH(1,1) recursion is propagated with innovations drawn from the empirical residual distribution below the threshold and from the fitted GPD above it. This gives both the daily VaR/ES path and the proper 10-day aggregate distribution, and lets me read off the comparison to naive scaling directly.
+
+```{python}
+def simulate_garch_evt(
+    garch_result, std_resid, threshold, xi, sigma_gpd,
+    horizon=10, n_sims=20_000, seed=42,
+):
+    """
+    Filtered Historical Simulation with EVT lower tail.
+    Innovations: bootstrap z from {z >= -u} (body), draw -(u+GPD) for loss tail.
+    Returns simulated simple % returns, shape (n_sims, horizon).
+    """
+    rng = np.random.default_rng(seed)
+
+    p = garch_result.params
+    mu, omega = p["mu"], p["omega"]
+    a1, b1   = p["alpha[1]"], p["beta[1]"]
+
+    sigma2_t = float(garch_result.conditional_volatility.iloc[-1]) ** 2
+    eps_t    = float(garch_result.resid.iloc[-1])
+
+    z_full = std_resid.dropna().to_numpy()
+    z_body = z_full[z_full >= -threshold]
+    p_tail = float((z_full < -threshold).mean())
+
+    u_unif  = rng.uniform(size=(n_sims, horizon))
+    is_tail = u_unif < p_tail
+    z = np.empty((n_sims, horizon))
+    z[~is_tail] = rng.choice(z_body, size=(~is_tail).sum(), replace=True)
+    excess      = genpareto.rvs(xi, scale=sigma_gpd,
+                                size=is_tail.sum(), random_state=rng)
+    z[is_tail]  = -(threshold + excess)
+
+    sim = np.empty((n_sims, horizon))
+    s2  = np.full(n_sims, sigma2_t)we
+    e   = np.full(n_sims, eps_t)
+    for h in range(horizon):
+        s2 = omega + a1 * e**2 + b1 * s2
+        e  = np.sqrt(s2) * z[:, h]
+        sim[:, h] = mu + e
+    return sim
+```
+
+```{python}
+#| label: mc-vs-scaling
+
+# --- MC: posterior-median point estimate ---
+xi_med, beta_med = np.median(xi), np.median(beta)
+varz_med, esz_med = np.median(VaR_z), np.median(ES_z)
+
+sim = simulate_garch_evt(result, std_resid, threshold=u,
+                         xi=xi_med, sigma_gpd=beta_med,
+                         horizon=10, n_sims=20_000)
+
+daily_loss   = -sim                              # simple % loss per day
+var_path_mc  = np.quantile(daily_loss, alpha, axis=0)
+es_path_mc   = np.array([
+    daily_loss[daily_loss[:, h] >= var_path_mc[h], h].mean()
+    for h in range(sim.shape[1])
+])
+cum_loss     = (1.0 - np.prod(1.0 + sim / 100.0, axis=1)) * 100.0
+var_cum_mc   = np.quantile(cum_loss, alpha)
+es_cum_mc    = cum_loss[cum_loss >= var_cum_mc].mean()
+
+# --- Naive scaling for comparison ---
+fc        = result.forecast(horizon=10, reindex=False)
+sigma_fc  = np.sqrt(fc.variance.values[-1, :])   # daily σ_h, in %
+sigma_10d = np.sqrt(np.sum(sigma_fc ** 2))
+
+var_path_scaled = varz_med * sigma_fc
+es_path_scaled  = esz_med  * sigma_fc
+var_cum_scaled  = varz_med * sigma_10d
+es_cum_scaled   = esz_med  * sigma_10d
+
+print(f"10-day VaR{alpha:.0%}  | MC: {var_cum_mc:5.2f}%   scaling: {var_cum_scaled:5.2f}%")
+print(f"10-day ES{alpha:.0%}   | MC: {es_cum_mc:5.2f}%   scaling: {es_cum_scaled:5.2f}%")
+```
+
+```{python}
+#| label: mc-plot
+#| fig-cap: "Left: daily VaR/ES path. Right: simulated 10-day cumulative loss distribution. Naive scaling agrees on the daily path (1-day quantile is the model object) but overstates the cumulative tail because it treats the 10-day return as if it were 1-day-distributed."
+
+h_axis = np.arange(1, 11)
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+# (a) Daily path
+ax = axes[0]
+ax.plot(h_axis, var_path_mc,     "o-", color="red",      label="VaR — MC")
+ax.plot(h_axis, var_path_scaled, "s--", color="red",     alpha=0.6, label="VaR — scaling")
+ax.plot(h_axis, es_path_mc,      "o-",  color="darkred", label="ES — MC")
+ax.plot(h_axis, es_path_scaled,  "s--", color="darkred", alpha=0.6, label="ES — scaling")
+ax.set_xlabel("Horizon (trading days)")
+ax.set_ylabel(f"{alpha:.0%} risk measure (% loss)")
+ax.set_title("Daily VaR / ES path")
+ax.legend()
+
+# (b) Cumulative distribution
+ax = axes[1]
+sns.histplot(cum_loss, bins=80, stat="density", alpha=0.5,
+             color="steelblue", edgecolor="none", ax=ax)
+ax.axvline(var_cum_mc,     color="red",      lw=2,             label=f"VaR (MC) {var_cum_mc:.2f}%")
+ax.axvline(es_cum_mc,      color="darkred",  lw=2, ls="--",    label=f"ES  (MC) {es_cum_mc:.2f}%")
+ax.axvline(var_cum_scaled, color="black",    lw=1.5, ls=":",   label=f"VaR (scaling) {var_cum_scaled:.2f}%")
+ax.set_xlim(left=np.quantile(cum_loss, 0.001))
+ax.set_xlabel("10-day cumulative loss (%)")
+ax.set_title("Simulated 10-day loss distribution")
+ax.legend()
+
+fig.suptitle("S&P 500 — 10-day VaR/ES forecast (FHS + EVT)", y=1.02)
+plt.tight_layout()
+plt.show()
+```
+
+
+```{python}
+#| label: mc-bayesian-predictive
+
+n_post   = 400
+rng_idx  = np.random.default_rng(0)
+idx      = rng_idx.choice(len(xi), n_post, replace=False)
+
+cum_pool = []
+for k in idx:
+    s = simulate_garch_evt(result, std_resid, threshold=u,
+                           xi=xi[k], sigma_gpd=beta[k],
+                           horizon=10, n_sims=2_000, seed=int(k))
+    cum_pool.append((1.0 - np.prod(1.0 + s / 100.0, axis=1)) * 100.0)
+cum_pool = np.concatenate(cum_pool)
+
+var_cum_bayes = np.quantile(cum_pool, alpha)
+es_cum_bayes  = cum_pool[cum_pool >= var_cum_bayes].mean()
+
+# Per-posterior-draw quantile, to get a credible interval on VaR itself
+var_per_draw = np.array([
+    np.quantile(c, alpha) for c in np.split(cum_pool, n_post)
+])
+ci = np.percentile(var_per_draw, [2.5, 97.5])
+
+print(f"10-day VaR{alpha:.0%} (Bayesian predictive): "
+      f"{var_cum_bayes:.2f}%  CI95 [{ci[0]:.2f}%, {ci[1]:.2f}%]")
+print(f"10-day ES{alpha:.0%}  (Bayesian predictive): {es_cum_bayes:.2f}%")
+```
+
+
+Naive POT-Implementation
+
+```{python}
+pyextremes.plot_mean_residual_life(log_losses)
+pyextremes.plot_parameter_stability(log_losses)
+```
+
+Very instable Estimates 
+
+```{python}
+print(f"Exzesse bei u=0.018: {np.sum(log_losses > 0.018)}")
+print(f"Exzesse bei u=0.02: {np.sum(log_losses > 0.02)}")
+print(f"Exzesse bei u=0.022.5: {np.sum(log_losses > 0.022)}")
+```
+
+Fitting POT-Model
+
+```{python}
+model = EVA(data=log_losses)
+model.get_extremes(method="POT", threshold=0.022)
+
+with Pool(10) as pool:
+    model.fit_model(
+        distribution="genpareto",
+        model="Emcee",
+        n_walkers=100,
+        n_samples=2000,
+        pool=pool,
+    )
+model.plot_diagnostic()
+model.plot_trace()
+model.plot_corner()
+trace = model.model.trace
+trace.shape[1] // 2
+burn_in = trace.shape[1] // 2
+samples = trace[:, burn_in:, :].reshape(-1, trace.shape[2])
+```
+
+Calculatin naive VaR and ES
+
+```{python}
+u = 0.022
+n_u = len(model.extremes)  # empirical number of exceedances
+n = len(log_losses)
+f_bar_u = n_u / n
+alpha = 0.99
+
+VaR_log_posterior = np.array(  # VaR on standardised residuals
+    [
+        u + s[1] / s[0] * (((1 - alpha) / f_bar_u) ** (-s[0]) - 1)
+        for s in samples
+        if s[0] > 0
+    ]
+)
+
+ES_log_posterior = []
+for s in samples:
+    if s[0] > 0:
+        var_s = u + s[1] / s[0] * (((1 - alpha) / f_bar_u) ** (-s[0]) - 1)
+        es_s = var_s / (1 - s[0]) + (s[1] - s[0] * u) / (1 - s[0])
+        ES_log_posterior.append(es_s)
+ES_log_posterior = np.array(ES_log_posterior)
+
+VaR_10d = np.median(VaR_log_posterior) * np.sqrt(10)  # Calculatin 10 day VaR
+ci_lower, ci_upper = np.percentile(VaR_log_posterior, [2.5, 97.5]) * np.sqrt(10)
+
+print(
+    f"10-Tages VaR_{alpha}: {(1 - np.exp(-VaR_10d)) * 100:.2f}% "
+    f"[{(1 - np.exp(-ci_lower)) * 100:.2f}%, "
+    f"{(1 - np.exp(-ci_upper)) * 100:.2f}%]"
+)
+
+ES_10d = np.median(ES_log_posterior) * np.sqrt(10)
+ci_lower, ci_upper = np.percentile(ES_log_posterior, [2.5, 97.5]) * np.sqrt(10)
+
+print(
+    f"10-Tages ES_{alpha}: {(1 - np.exp(-ES_10d)) * 100:.2f}% "
+    f"[{(1 - np.exp(-ci_lower)) * 100:.2f}%, "
+    f"{(1 - np.exp(-ci_upper)) * 100:.2f}%]"
+)
+```
+Negative ES in the intervall! Checking Posteriorsamples
+
+```{python}
+print(f"VaR posterior: min={np.min(VaR_log_posterior):.4f}, max={np.max(VaR_log_posterior):.4f}")
+print(f"ES posterior: min={np.min(ES_log_posterior):.4f}, max={np.max(ES_log_posterior):.4f}")
+print(f"Negative ES samples: {np.sum(ES_log_posterior < 0)}")
+print(f"Anteil: {np.sum(ES_log_posterior < 0)/len(ES_log_posterior):.1%}")
+```
+
+Looks not dramatic => using allowed boundaries
+
+```{python}
+clean_mask = (VaR_log_posterior > 0) & (ES_log_posterior > 0)
+VaR_clean = VaR_log_posterior[clean_mask]
+ES_clean = ES_log_posterior[clean_mask]
+
+print(
+    f"Gültige Samples: {clean_mask.sum()}/{len(clean_mask)} ({clean_mask.mean():.1%})"
+)
+
+VaR_10d = np.median(VaR_clean) * np.sqrt(10)
+ES_10d = np.median(ES_clean) * np.sqrt(10)
+ci_var = np.percentile(VaR_clean, [2.5, 97.5]) * np.sqrt(10)
+ci_es = np.percentile(ES_clean, [2.5, 97.5]) * np.sqrt(10)
+
+print(
+    f"VaR: {(1 - np.exp(-VaR_10d)) * 100:.2f}% [{(1 - np.exp(-ci_var[0])) * 100:.2f}%, {(1 - np.exp(-ci_var[1])) * 100:.2f}%]"
+)
+print(
+    f"ES: {(1 - np.exp(-ES_10d)) * 100:.2f}% [{(1 - np.exp(-ci_es[0])) * 100:.2f}%, {(1 - np.exp(-ci_es[1])) * 100:.2f}%]"
+)
+```
+
+
+
+
+

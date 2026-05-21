@@ -1,0 +1,9 @@
+yfinance
+arch
+scipy
+numpy
+pandas
+matplotlib
+pyextremes
+emcee
+corner
