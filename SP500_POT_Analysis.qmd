@@ -167,9 +167,8 @@ Next, I check for anomalies in chain mixing and inspect the posterior distributi
 model.plot_trace()
 model.plot_corner()
 
-```{python}
 trace = model.model.trace
-burn_in = trace.shape[1] //2
+burn_in = trace.shape[1] // 2
 samples = trace[:, burn_in:, :].reshape(-1, trace.shape[2])
 s_xi = samples.mean(axis=0)
 print(f"\\xi (posterior mean): {s_xi[0]}")
@@ -178,7 +177,6 @@ xi_mean = samples[:, 0].mean()
 xi_lo = np.percentile(samples[:, 0], 2.5)
 xi_hi = np.percentile(samples[:, 0], 97.5)
 tail_index = 1 / xi_mean
-
 ```
 
 The chains mix well: both parameters fluctuate around a stable level from early on, with no drift, stickiness, or visible regime changes. The posterior of $\xi$ is reasonably concentrated  (roughly $\xi \in$ [`{python} f"{xi_lo:.2f}"`, `{python} f"{xi_hi:.2f}"`]), smooth, and unimodal, with no outlying mass. The corner plot reveals a clear negative correlation between $\xi$ and $\sigma$, which is a well-known feature of the GPD likelihood — the two parameters are not orthogonal, so estimation uncertainty in one partly compensates for the other.
