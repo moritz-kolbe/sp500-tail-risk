@@ -224,13 +224,17 @@ sigma_next = np.sqrt(forecast.variance.values[-1, 0])
 VaR_posterior = VaR_z * sigma_next
 ES_posterior = ES_z * sigma_next
 
-print(f"Next-day VaR_{alpha}: {np.median(VaR_posterior):.2f}% "
-      f"[{np.percentile(VaR_posterior, 2.5):.2f}%, "
-      f"{np.percentile(VaR_posterior, 97.5):.2f}%]")
+print(
+    f"Next-day VaR_{alpha}: {np.median(VaR_posterior):.2f}% "
+    f"[{np.percentile(VaR_posterior, 2.5):.2f}%, "
+    f"{np.percentile(VaR_posterior, 97.5):.2f}%]"
+)
 
-print(f"Next-day ES_{alpha}: {np.median(ES_posterior):.2f}% "
-      f"[{np.percentile(ES_posterior, 2.5):.2f}%, "
-      f"{np.percentile(ES_posterior, 97.5):.2f}%]")
+print(
+    f"Next-day ES_{alpha}: {np.median(ES_posterior):.2f}% "
+    f"[{np.percentile(ES_posterior, 2.5):.2f}%, "
+    f"{np.percentile(ES_posterior, 97.5):.2f}%]"
+)
 ```
 
 ## Backtesting
