@@ -3,15 +3,18 @@ title: "POT-Implementation - S&P500 - naive vs. whitened"
 format: html
 ---
 ## Problem Statement and Objectives
-This project demonstrates how risk measure inference, based on POT-modelling, 
-is influenced by accounting for the dependence structure of time-series index data. 
-To illustrate this, two approaches are compared: the first whitens the data prior 
-to POT-analysis, i.e. it is preceded by a simple GARCH(1,1)-model. The second 
-approach does not account for this volatility-dependence structure. Based on the 
-results of the POT-model, $\text{VaR}_{\alpha}$ and $\text{ES}_{\alpha}$ are 
-calculated as risk measures in both cases. The measures are validated via backtesting 
-and evaluated using the Kupiec- and Christoffersen-Test. Finally, for both approaches, 
-a 10-day forecast is produced.
+This project demonstrates two complementary approaches to tail risk estimation 
+for the S&P 500. The first applies a GARCH(1,1) filter prior to POT analysis, 
+yielding a conditional EVT model in which risk measures vary with the current 
+volatility regime. This approach is suited for short-term risk management: it 
+produces dynamic $\text{VaR}_{\alpha}$ and $\text{ES}_{\alpha}$ estimates that 
+can be validated via rolling-window backtesting (Kupiec and Christoffersen tests) 
+and used for 10-day forward forecasts via filtered historical simulation. The 
+second approach applies POT directly to the raw log-losses. While this unconditional 
+model is too static for day-to-day risk management, it is the natural framework 
+for long-run tail characterisation: return levels and return periods, which describe 
+the magnitude and frequency of extreme losses without reference to a specific 
+volatility state.
 
 ## Preparation
 
@@ -29,7 +32,7 @@ import pyextremes
 from arch import arch_model
 import yfinance as yf
 from multiprocessing import Pool
-from VaR_backtest_utils_correct import backtest_single, init_worker # git-repository
+from VaR_backtest_utils import backtest_single, init_worker
 ```
 
 ### Loading Data -  S&P500
@@ -51,7 +54,9 @@ Second, the sample covers a wide range of structurally different crisis episodes
 The main caveat is stationarity: over a window of this length, market microstructure, regulation, and the index composition itself have changed substantially, so strict stationarity is implausible for the raw return series. The GARCH pre-whitening step addresses part of this concern by absorbing time-varying volatility into the conditional variance, leaving the standardised residuals as the object on which the (much weaker) stationarity assumption is then imposed.
 
 ```{python}
-prices = yf.download("^GSPC", start="1980-01-01")["Close"]  # on single stocks Adj.Close
+prices = yf.download("^GSPC", start="1980-01-01", end="2026-04-01")[
+    "Close"
+]  # on single stocks Adj.Close
 returns_dec = prices.pct_change().dropna().squeeze()  # squeze for series format
 log_losses = -np.log(prices / prices.shift(1)).dropna().squeeze()
 
@@ -65,7 +70,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-## Volatility-filtered POT-Analysis
+## Volatility-filtered POT-Analysis - Conditional Analysis
 ### Pre-Whitening
 
 Financial return series exhibit several well-known stylized facts: they are not iid, volatility varies over time, and extreme returns tend to cluster. This section shows how these features can be accounted for by pre-filtering the series with a GARCH model before applying POT analysis. A full treatment of GARCH modelling and autocorrelation diagnostics is given in a separate project (univariate and multivariate time series modelling (forthcoming)); here I only sketch the idea.
@@ -365,7 +370,7 @@ def simulate_garch_evt(
     z[is_tail]  = -(threshold + excess)
 
     sim = np.empty((n_sims, horizon))
-    s2  = np.full(n_sims, sigma2_t)we
+    s2  = np.full(n_sims, sigma2_t)
     e   = np.full(n_sims, eps_t)
     for h in range(horizon):
         s2 = omega + a1 * e**2 + b1 * s2
