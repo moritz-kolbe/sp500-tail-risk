@@ -238,6 +238,7 @@ print(
 ```
 
 ## Backtesting
+### VaR Backtest
 To assess how well the conditional EVT model performs out-of-sample, I run a rolling-window backtest of the 99% one-day VaR. For each day $t \geq 1000$ in the sample, the procedure is:
 
 1. Re-fit a GARCH(1,1) model on the most recent 1000 returns;
@@ -264,16 +265,18 @@ with Pool(
 ) as pool:
     results = pool.map(backtest_single, range(window, len(returns_dec)))
 
-var_estimates, violations = zip(*results)
+var_estimates, es_estimates, violations = zip(*results)
 var_estimates = np.array(var_estimates)
+es_estimates = np.array(es_estimates)
 violations = np.array(violations)
 
-valid = ~np.isnan(var_estimates)
-violations_clean = violations[valid]
-var_clean = var_estimates[valid]
+valid_var = ~np.isnan(var_estimates)
+violations_clean = violations[valid_var]
+var_clean = var_estimates[valid_var]
+es_clean = es_estimates[valid_var]
 ```
 
-### Results
+#### Results
 
 ```{python}
 n_obs = len(violations_clean)
@@ -293,8 +296,8 @@ LR = -2 * (
 p_value = 1 - chi2.cdf(LR, df=1)
 print(f"Kupiec: LR={LR:.3f}, p={p_value:.4f}")
 
-dates_test = returns_dec.index[window:][valid]
-actual_losses = -returns_dec.values[window:][valid]
+dates_test = returns_dec.index[window:][valid_var]
+actual_losses = -returns_dec.values[window:][valid_var]
 
 # --- Christoffersen-Test ---
 def christoffersen(violations, p0=0.01):
@@ -351,6 +354,21 @@ The backtest covers `{python} f"{n_obs:,}"` out-of-sample days from `{python} st
 **Conditional coverage.** The combined test `{python} "rejects" if p_cc < 0.05 else "does not reject"` at the 5% level ($LR =$ `{python} f"{LR_cc:.2f}"`, $p =$ `{python} f"{p_cc:.2f}"`). Overall, the model captures the right number of tail events but with slightly clustered timing.
 
 **Practical assessment.** From a risk-management perspective the result is encouraging: a violation rate close to the nominal level over a `{python} n_years_bt`-year out-of-sample window is a strong outcome, especially considering that the model was estimated on rolling windows of only 1000 days and never had access to future information. The clustering of violations is a real but interpretable limitation. Natural refinements that should reduce it are an asymmetric GARCH specification (e.g. GJR-GARCH or EGARCH) and a heavier-tailed innovation distribution (Student-$t$ or skewed-$t$). Both are straightforward extensions and will be explored in follow-up work.
+
+### ES Backtest
+Since backtesting is conducted at the 99% level, only `{python} n_viol` violation days are available for ES evaluation. A formal test — such as a t-test on the exceedance residuals — would have negligible power at this sample size, so I restrict the analysis to a comparison of means.
+
+```{python}
+es_empirical = actual_losses[violations_clean].mean()
+es_estimated = es_clean[violations_clean].mean()
+print(f"ES estimated (mean on violation days): {es_estimated*100:.2f}%")
+print(f"ES empirical (mean realized loss):     {es_empirical*100:.2f}%")
+
+difference = es_empirical-es_estimated
+```
+
+The estimated ES falls short of the empirical mean loss on violation days by  roughly `{python} f"{difference:.2f}"` percentage points. This is consistent 
+with a known limitation of stationary GPD fits: isolated extreme events — such  as the 1987 crash or the March 2020 shock — lie beyond the bulk of the fitted tail and are systematically underestimated.
 
 ### 10-Day Forecast
 
