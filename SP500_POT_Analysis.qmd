@@ -47,18 +47,20 @@ modelling would be needed (forthcoming).
 
 I use daily S&P 500 closing prices from 1980 onwards. There are two main reasons for this long sample window.
 
-First, EVT relies on a sufficient number of tail observations. With roughly 46 years of daily data, the sample contains over 11,000 returns and several hundred exceedances even at high thresholds, which gives the GPD estimates a comfortable basis.
+First, EVT relies on a sufficient number of tail observations. With roughly `{python} f"{n_years:.0f}"` years of daily data, the sample contains over `{python} f"{n_obs:,}"` returns and several hundred exceedances even at high thresholds, which gives the GPD estimates a comfortable basis.
 
 Second, the sample covers a wide range of structurally different crisis episodes — Black Monday (1987), the dot-com crash (2000–2002), the global financial crisis (2007–2009), the European sovereign debt crisis (2011), the COVID-19 shock (March 2020), and the 2022 inflation regime. This diversity makes the estimated tail behaviour less dependent on any single episode and arguably more representative of the kinds of extremes a risk manager has to anticipate.
 
 The main caveat is stationarity: over a window of this length, market microstructure, regulation, and the index composition itself have changed substantially, so strict stationarity is implausible for the raw return series. The GARCH pre-whitening step addresses part of this concern by absorbing time-varying volatility into the conditional variance, leaving the standardised residuals as the object on which the (much weaker) stationarity assumption is then imposed.
 
 ```{python}
-prices = yf.download("^GSPC", start="1980-01-01", end="2026-04-01")[
+prices = yf.download("^GSPC", start="1980-01-01")[
     "Close"
 ]  # on single stocks Adj.Close
 returns_dec = prices.pct_change().dropna().squeeze()  # squeze for series format
 log_losses = -np.log(prices / prices.shift(1)).dropna().squeeze()
+n_years = (returns_dec.index[-1] - returns_dec.index[0]).days / 365.25
+n_obs = len(returns_dec)
 
 
 fig, axes = plt.subplots(1, 2, figsize=(16, 5))
@@ -121,10 +123,11 @@ Both parameters are reasonably stable for $u \in [2.0, 2.5]$; beyond that, the v
 ```{python}
 print(f"Exceedances at u = 2: {np.sum(losses > 2.0)}")
 print(f"Exceedances at u = 2.2: {np.sum(losses > 2.2)}")
+n_exceed_u = int(np.sum(losses > 2.2))
 print(f"Exceedances at u = 2.5: {np.sum(losses > 2.5)}")
 ```
 
-With roughly 270 exceedances at $u = 2.2$, the sample size is comfortable for GPD estimation while the threshold still lies within the range supported by the diagnostics.
+With roughly `{python} n_exceed_u` exceedances at $u = 2.2$, the sample size is comfortable for GPD estimation while the threshold still lies within the range supported by the diagnostics.
 
 ### POT Analysis
 
@@ -164,7 +167,7 @@ model.plot_trace()
 model.plot_corner()
 ```
 
-The chains mix well: both parameters fluctuate around a stable level from early on, with no drift, stickiness, or visible regime changes. The posterior of $\xi$ is reasonably concentrated (roughly $\xi \in [0.075, 0.58]$), smooth, and unimodal, with no outlying mass. The corner plot reveals a clear negative correlation between $\xi$ and $\sigma$, which is a well-known feature of the GPD likelihood — the two parameters are not orthogonal, so estimation uncertainty in one partly compensates for the other.
+The chains mix well: both parameters fluctuate around a stable level from early on, with no drift, stickiness, or visible regime changes. The posterior of $\xi$ is reasonably concentrated  (roughly $\xi \in$ [`{python} f"{xi_lo:.2f}"`, `{python} f"{xi_hi:.2f}"`]), smooth, and unimodal, with no outlying mass. The corner plot reveals a clear negative correlation between $\xi$ and $\sigma$, which is a well-known feature of the GPD likelihood — the two parameters are not orthogonal, so estimation uncertainty in one partly compensates for the other.
 
 ```{python}
 trace = model.model.trace
@@ -172,9 +175,18 @@ burn_in = trace.shape[1] //2
 samples = trace[:, burn_in:, :].reshape(-1, trace.shape[2])
 s_xi = samples.mean(axis=0)
 print(f"\\xi (posterior mean): {s_xi[0]}")
+
+xi_mean = samples[:, 0].mean()
+xi_lo = np.percentile(samples[:, 0], 2.5)
+xi_hi = np.percentile(samples[:, 0], 97.5)
+tail_index = 1 / xi_mean
 ```
 
-With $\hat{\xi} \approx 0.25$, the implied tail index is $\alpha = 1/\xi \approx 4$. This means that moments of order $k < 4$ exist, while the **fourth moment (kurtosis) is already infinite — a plausible result for daily equity losses and consistent with the heavy-tailed behaviour typically observed in financial return series.
+With $\hat{\xi} \approx$ `{python} f"{xi_mean:.2f}"`, the implied tail index is $1/\xi \approx$ `{python} f"{tail_index:.0f}"`.$. This means that moments of order $k < 4$ exist, while the **fourth moment (kurtosis) is already infinite — a plausible result for daily equity losses and consistent with the heavy-tailed behaviour typically observed in financial return series.
+
+> **Note:** The $R^2$ values, posterior intervals, and tail index quoted above 
+> reflect a model run on data through April 2026 and will change slightly with 
+> different data vintages or random seeds.
 
 ### Posterior of $\operatorname{VaR}_{0.99}$ and $\operatorname{ES}_{0.99}$
 
@@ -318,19 +330,23 @@ plt.legend()
 plt.title("VaR Backtesting — GARCH + Rolling POT")
 plt.ylabel("Loss (simple return)")
 plt.show()
+
+start_year = dates_test[0].year
+end_year = dates_test[-1].year
+n_years_bt = end_year - start_year
 ```
 
 #### Discussion
 
-The backtest covers `{python} f"{n_obs:,}"` out-of-sample days from 1984 to 2026, with `{python} n_viol` recorded violations of the 99% VaR.
+The backtest covers `{python} f"{n_obs:,}"` out-of-sample days from `{python} start_year` to `{python} end_year`, with `{python} n_viol` recorded violations of the 99% VaR.
 
-**Unconditional coverage.** With an empirical violation rate of `{python} f"{n_viol/n_obs*100:.2f}"`% against a nominal 1%, the Kupiec test does not reject the null of correct unconditional coverage ($LR = 0.10$, $p = 0.75$). The conditional EVT model produces almost exactly the right number of tail violations over four decades, including periods as different as the 1987 crash, the dot-com era, the global financial crisis, the eurozone crisis, and the COVID-19 shock.
+**Unconditional coverage.** With an empirical violation rate of `{python} f"{n_viol/n_obs*100:.2f}"`% against a nominal 1%, the Kupiec test does not reject the null of correct unconditional coverage ($LR =$ `{python} f"{LR:.2f}"`, $p =$ `{python} f"{p_value:.2f}"`). The conditional EVT model produces almost exactly the right number of tail violations over four decades, including periods as different as the 1987 crash, the dot-com era, the global financial crisis, the eurozone crisis, and the COVID-19 shock.
 
-**Independence.** The Christoffersen independence test rejects the null at the 5% level ($LR = 4.51$, $p = 0.034$). Visual inspection of the violation series confirms this: violations cluster around major crisis periods, particularly 1987, 1998 (LTCM/Asian crisis), 2007–2009, and March 2020. Although GARCH(1,1) substantially reduces volatility-induced clustering relative to a static model, residual dependence remains — likely because GARCH(1,1) does not capture the leverage effect (negative shocks raising volatility more than positive ones), assumes Gaussian innovations even though the standardised residuals are clearly heavy-tailed, and uses a rather simple lag structure.
+**Independence.** The Christoffersen independence test `{python} "rejects" if p_ind < 0.05 else "does not reject"` the null at the 5% level ($LR =$ `{python} f"{LR_ind:.2f}"`, $p =$ `{python} f"{p_ind:.3f}"`). Visual inspection of the violation series confirms this: violations cluster around major crisis periods, particularly 1987, 1998 (LTCM/Asian crisis), 2007–2009, and March 2020. Although GARCH(1,1) substantially reduces volatility-induced clustering relative to a static model, residual dependence remains — likely because GARCH(1,1) does not capture the leverage effect, assumes Gaussian innovations even though the standardised residuals are clearly heavy-tailed, and uses a rather simple lag structure.
 
-**Conditional coverage.** The combined test is borderline but not rejected at the 5% level ($LR = 4.61$, $p = 0.10$). Overall, the model captures the right number of tail events but with slightly clustered timing.
+**Conditional coverage.** The combined test `{python} "rejects" if p_cc < 0.05 else "does not reject"` at the 5% level ($LR =$ `{python} f"{LR_cc:.2f}"`, $p =$ `{python} f"{p_cc:.2f}"`). Overall, the model captures the right number of tail events but with slightly clustered timing.
 
-**Practical assessment.** From a risk-management perspective the result is encouraging: a violation rate within 3% of the nominal level over a 42-year out-of-sample window is a strong outcome, especially considering that the model was estimated on rolling windows of only 1000 days and never had access to future information. The clustering of violations is a real but interpretable limitation. Natural refinements that should reduce it are an asymmetric GARCH specification (e.g. GJR-GARCH or EGARCH) and a heavier-tailed innovation distribution (Student-$t$ or skewed-$t$). Both are straightforward extensions and will be explored in follow-up work.
+**Practical assessment.** From a risk-management perspective the result is encouraging: a violation rate close to the nominal level over a `{python} n_years_bt`-year out-of-sample window is a strong outcome, especially considering that the model was estimated on rolling windows of only 1000 days and never had access to future information. The clustering of violations is a real but interpretable limitation. Natural refinements that should reduce it are an asymmetric GARCH specification (e.g. GJR-GARCH or EGARCH) and a heavier-tailed innovation distribution (Student-$t$ or skewed-$t$). Both are straightforward extensions and will be explored in follow-up work.
 
 ### 10-Day Forecast
 
