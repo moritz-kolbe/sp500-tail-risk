@@ -166,9 +166,6 @@ Next, I check for anomalies in chain mixing and inspect the posterior distributi
 ```{python}
 model.plot_trace()
 model.plot_corner()
-```
-
-The chains mix well: both parameters fluctuate around a stable level from early on, with no drift, stickiness, or visible regime changes. The posterior of $\xi$ is reasonably concentrated  (roughly $\xi \in$ [`{python} f"{xi_lo:.2f}"`, `{python} f"{xi_hi:.2f}"`]), smooth, and unimodal, with no outlying mass. The corner plot reveals a clear negative correlation between $\xi$ and $\sigma$, which is a well-known feature of the GPD likelihood — the two parameters are not orthogonal, so estimation uncertainty in one partly compensates for the other.
 
 ```{python}
 trace = model.model.trace
@@ -182,6 +179,9 @@ xi_lo = np.percentile(samples[:, 0], 2.5)
 xi_hi = np.percentile(samples[:, 0], 97.5)
 tail_index = 1 / xi_mean
 ```
+```
+
+The chains mix well: both parameters fluctuate around a stable level from early on, with no drift, stickiness, or visible regime changes. The posterior of $\xi$ is reasonably concentrated  (roughly $\xi \in$ [`{python} f"{xi_lo:.2f}"`, `{python} f"{xi_hi:.2f}"`]), smooth, and unimodal, with no outlying mass. The corner plot reveals a clear negative correlation between $\xi$ and $\sigma$, which is a well-known feature of the GPD likelihood — the two parameters are not orthogonal, so estimation uncertainty in one partly compensates for the other.
 
 With $\hat{\xi} \approx$ `{python} f"{xi_mean:.2f}"`, the implied tail index is $1/\xi \approx$ `{python} f"{tail_index:.0f}"`.$. This means that moments of order $k < 4$ exist, while the **fourth moment (kurtosis) is already infinite — a plausible result for daily equity losses and consistent with the heavy-tailed behaviour typically observed in financial return series.
 
