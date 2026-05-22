@@ -25,7 +25,7 @@ import pandas as pd
 import numpy as np
 import pyextremes
 from pyextremes import EVA 
-from scipy.stats import chi2, genpareto, 
+from scipy.stats import chi2, genpareto, ttest_1samp
 import matplotlib.pyplot as plt
 import seaborn as sns 
 import pyextremes
@@ -171,7 +171,7 @@ trace = model.model.trace
 burn_in = trace.shape[1] // 2
 samples = trace[:, burn_in:, :].reshape(-1, trace.shape[2])
 s_xi = samples.mean(axis=0)
-print(f"\\xi (posterior mean): {s_xi[0]}")
+print(f"xi (posterior mean): {samples[:, 0].mean():.3f}")
 
 xi_mean = samples[:, 0].mean()
 xi_lo = np.percentile(samples[:, 0], 2.5)
@@ -197,10 +197,12 @@ where $\xi$ and $\beta$ are the shape and scale parameters of the fitted GPD. Th
 $$
 \hat{\bar{F}}(u) = \frac{N_u}{n},
 $$
+
 the proportion of observations exceeding the threshold $u$. Expected shortfall follows as
 $$
 \operatorname{ES}_\alpha = \frac{\operatorname{VaR}_\alpha + \beta - \xi u}{1 - \xi}, \qquad \xi < 1,
 $$
+
 where the condition $\xi < 1$ ensures that $\operatorname{ES}_\alpha$ is finite. With $\hat{\xi} \approx 0.25$ this is comfortably satisfied.
 
 Since the model was estimated via `emcee`, I propagate the full posterior of $(\xi, \beta)$ through both formulas instead of relying on point estimates only, which allows uncertainty to be reflected in credible intervals for $\operatorname{VaR}_\alpha$ and $\operatorname{ES}_\alpha$.
@@ -243,14 +245,14 @@ To assess how well the conditional EVT model performs out-of-sample, I run a rol
 1. Re-fit a GARCH(1,1) model on the most recent 1000 returns;
 2. Extract the standardised residuals and fit a GPD via maximum likelihood to the exceedances above their 95% empirical quantile;
 3. Obtain the one-step-ahead conditional volatility $\hat{\sigma}_{t+1}$ from the GARCH forecast;
-4. Compute $\operatorname{VaR}^z_{0.99}$ from the GPD parameters and rescale to $\operatorname{VaR}_{t+1} = \hat{\sigma}_{t+1} \cdot \operatorname{VaR}^z_{0.99}$;
-5. Record a violation if the realised loss at $t+1$ exceeds $\operatorname{VaR}_{t+1}$.
+4. Compute $\text{VaR}^z_{0.99}$ from the GPD parameters and rescale to $\text{VaR}_{t+1} = \hat{\sigma}_{t+1} \cdot \text{VaR}^z_{0.99}$;
+5. Record a violation if the realised loss at $t+1$ exceeds $\text{VaR}_{t+1}$.
 
 This produces a sequence of out-of-sample VaR forecasts and corresponding violation indicators that can be evaluated with standard backtesting procedures (Kupiec, Christoffersen).
 
-A few design choices deserve comment. The rolling window of 1000 days (~4 trading years) balances estimation stability against responsiveness to changing market regimes. The threshold is set to the rolling 95% quantile rather than a fixed value, since the scale of the standardised residuals can drift slightly between windows. GPD parameters are estimated by MLE rather than MCMC: with several thousand re-fits, full Bayesian inference would be computationally prohibitive, and only the point estimate of $\operatorname{VaR}^z$ is needed to determine whether a violation occurred. Iterations with fewer than 20 exceedances are flagged as missing and excluded from the evaluation. Computation is parallelised across cores using `multiprocessing.Pool`; the worker initialiser pattern is required on macOS where the spawn start method does not inherit module-level state.
+A few design choices deserve comment. The rolling window of 1000 days (~4 trading years) balances estimation stability against responsiveness to changing market regimes. The threshold is set to the rolling 95% quantile rather than a fixed value, since the scale of the standardised residuals can drift slightly between windows. GPD parameters are estimated by MLE rather than MCMC: with several thousand re-fits, full Bayesian inference would be computationally prohibitive, and only the point estimate of $\text{VaR}^z$ is needed to determine whether a violation occurred. Iterations with fewer than 20 exceedances are flagged as missing and excluded from the evaluation. Computation is parallelised across cores using `multiprocessing.Pool`; the worker initialiser pattern is required on macOS where the spawn start method does not inherit module-level state.
 
-The rolling-window logic is implemented in `VaR_backtest_utils_correct.py` (see repository); the cell below executes the backtest.
+The rolling-window logic is implemented in `VaR_backtest_utils.py` (see repository); the cell below executes the backtest.
 
 ```{python}
 window = 1000
@@ -344,7 +346,7 @@ n_years_bt = end_year - start_year
 
 #### Discussion
 
-The backtest covers `{python} f"{n_obs:,}"` out-of-sample days from `{python} start_year` to `{python} end_year`, with `{python} n_viol` recorded violations of the 99% VaR.
+The backtest covers `{python} f"{n_obs:,}"` out-of-sample days from `{python} start_year` to `{python} end_year`, with `{python} n_viol` recorded violations of the 99% $\text{VaR}$.
 
 **Unconditional coverage.** With an empirical violation rate of `{python} f"{n_viol/n_obs*100:.2f}"`% against a nominal 1%, the Kupiec test does not reject the null of correct unconditional coverage ($LR =$ `{python} f"{LR:.2f}"`, $p =$ `{python} f"{p_value:.2f}"`). The conditional EVT model produces almost exactly the right number of tail violations over four decades, including periods as different as the 1987 crash, the dot-com era, the global financial crisis, the eurozone crisis, and the COVID-19 shock.
 
@@ -355,30 +357,27 @@ The backtest covers `{python} f"{n_obs:,}"` out-of-sample days from `{python} st
 **Practical assessment.** From a risk-management perspective the result is encouraging: a violation rate close to the nominal level over a `{python} n_years_bt`-year out-of-sample window is a strong outcome, especially considering that the model was estimated on rolling windows of only 1000 days and never had access to future information. The clustering of violations is a real but interpretable limitation. Natural refinements that should reduce it are an asymmetric GARCH specification (e.g. GJR-GARCH or EGARCH) and a heavier-tailed innovation distribution (Student-$t$ or skewed-$t$). Both are straightforward extensions and will be explored in follow-up work.
 
 ### ES Backtest
-Since backtesting is conducted at the 99% level, only `{python} n_viol` violation days are available for ES evaluation. A formal test — such as a t-test on the exceedance residuals — would have negligible power at this sample size, so I restrict the analysis to a comparison of means.
+Since backtesting is conducted at the 99% level, only `{python} n_viol` violation days are available for $\text{ES}$ evaluation. I test whether the exceedance residuals $K_{t+1} = (L_{t+1} - \widehat{ES}_t^\alpha) / \widehat{ES}_t^\alpha$ have mean zero using a one-sample t-test
 
 ```{python}
-es_empirical = actual_losses[violations_clean].mean()
-es_estimated = es_clean[violations_clean].mean()
-print(f"ES estimated (mean on violation days): {es_estimated * 100:.2f}%")
-print(f"ES empirical (mean realized loss):     {es_empirical * 100:.2f}%")
-
-difference = es_empirical - es_estimated
-
 exceedance_residuals = (
     actual_losses[violations_clean] - es_clean[violations_clean]
 ) / es_clean[violations_clean]
-critical_value = t.sf()
+stat, p_val = ttest_1samp(exceedance_residuals, popmean=0)
+print(stat)
+print(p_val)
+es_empirical = actual_losses[violations_clean].mean()
+es_estimated = es_clean[violations_clean].mean()
+difference = (es_empirical-es_estimated)*100
 ```
 
-The estimated ES falls short of the empirical mean loss on violation days by  roughly `{python} f"{difference:.2f}"` percentage points. This is consistent 
-with a known limitation of stationary GPD fits: isolated extreme events — such  as the 1987 crash or the March 2020 shock — lie beyond the bulk of the fitted tail and are systematically underestimated.
+The null hypothesis of mean-zero residuals is not rejected at the 5% level ($t =$ `{python} f"{stat:.3f}"`, $p =$ `{python} f"{p_val:.4f}"`). The estimated ES falls short of the empirical mean loss on violation days by roughly `{python} f"{difference:.2f}"` percentage points, but this underestimation is not statistically significant. 
 
 ### 10-Day Forecast
 
 Standard scaling (`VaR_z · σ_h`) implicitly assumes that the *h*-day standardised return has the same distribution as the 1-day innovation. Under iid-like residuals this is fine for the daily VaR path (each horizon is still a 1-day quantile, only σh\sigma_h
 σh​ changes), but not for the cumulative 10-day loss: a sum of hh
-h heavy-tailed variables drifts toward a thinner-tailed limit (CLT), so cumulative scaling overstates the true tail. To handle this consistently I simulate forward paths using filtered historical simulation (McNeil & Frey, 2000): the GARCH(1,1) recursion is propagated with innovations drawn from the empirical residual distribution below the threshold and from the fitted GPD above it. This gives both the daily VaR/ES path and the proper 10-day aggregate distribution, and lets me read off the comparison to naive scaling directly.
+h heavy-tailed variables drifts toward a thinner-tailed limit (CLT), so cumulative scaling overstates the true tail. To handle this consistently I simulate forward paths using HS-GARCH-EVT approach (McNeil & Frey, 2000): the GARCH(1,1) recursion is propagated with innovations drawn from the empirical residual distribution below the threshold and from the fitted GPD above it. This gives both the daily VaR/ES path and the proper 10-day aggregate distribution, and lets me read off the comparison to naive scaling directly. For comparison, the naive square-root-of-time scaling rule is included. As expected, it systematically overstates both VaR and ES.
 
 ```{python}
 def simulate_garch_evt(
@@ -481,6 +480,7 @@ sns.histplot(cum_loss, bins=80, stat="density", alpha=0.5,
 ax.axvline(var_cum_mc,     color="red",      lw=2,             label=f"VaR (MC) {var_cum_mc:.2f}%")
 ax.axvline(es_cum_mc,      color="darkred",  lw=2, ls="--",    label=f"ES  (MC) {es_cum_mc:.2f}%")
 ax.axvline(var_cum_scaled, color="black",    lw=1.5, ls=":",   label=f"VaR (scaling) {var_cum_scaled:.2f}%")
+ax.axvline(es_cum_scaled,      color="black",  lw=2, ls="--",    label=f"ES  (scaling) {es_cum_scaled:.2f}%")
 ax.set_xlim(left=np.quantile(cum_loss, 0.001))
 ax.set_xlabel("10-day cumulative loss (%)")
 ax.set_title("Simulated 10-day loss distribution")
@@ -522,26 +522,38 @@ print(f"10-day ES{alpha:.0%}  (Bayesian predictive): {es_cum_bayes:.2f}%")
 ```
 
 
-Naive POT-Implementation
+## Unfiltered POT-Analysis - Unconditional Analysis
+
+For long-term risk assessment — such as determining regulatory capital buffers or evaluating tail risk over multi-year horizons — it is useful to characterise the loss distribution without conditioning on a specific volatility state. The natural quantity here is the *return level*: the loss magnitude that is exceeded on average once every $T$ years. Its conceptual proximity to $\text{VaR}$ makes it straightforward to compute. Since the S&P 500 has approximately 250 trading days per year, a $T$-year return level corresponds to the VaR at confidence level
+
+$$
+\alpha = 1 - \frac{1}{T \cdot 250},
+$$
+
+which can be read directly from the fitted GPD via the standard POT formula.
+
+The fitting procedure mirrors the conditional analysis exactly; I therefore restrict the commentary to features specific to the unconditional setting.
 
 ```{python}
 pyextremes.plot_mean_residual_life(log_losses)
 pyextremes.plot_parameter_stability(log_losses)
 ```
 
-Very instable Estimates 
+A notable difference from the conditional analysis is the instability of the GPD parameter estimates. The parameter stability plot reveals no clear region where both $\xi$ and $\sigma^*$ stabilise simultaneously, making threshold selection considerably more difficult. This is a direct consequence of the volatility clustering present in raw log-losses: since large losses tend to occur in bursts, the tail behaviour of the unfiltered series is less well described by a stationary GPD than that of the GARCH residuals.
 
 ```{python}
-print(f"Exzesse bei u=0.018: {np.sum(log_losses > 0.018)}")
-print(f"Exzesse bei u=0.02: {np.sum(log_losses > 0.02)}")
-print(f"Exzesse bei u=0.022.5: {np.sum(log_losses > 0.022)}")
+print(f"Exceedances at u=0.02: {np.sum(log_losses > 0.02)}")
+print(f"Exceedances at u=0.0225: {np.sum(log_losses > 0.0225)}")
+print(f"Exceedances at u=0.024: {np.sum(log_losses > 0.024)}")
+n_exceed_u_2 = int(np.sum(log_losses > 0.024))
+ 
 ```
 
-Fitting POT-Model
+Despite the instability in the parameter plots, the exceedance count of `{python} n_exceed_u_2` at $u = 0.024$ provides a sufficient basis for GPD estimation, and I proceed with this threshold.
 
 ```{python}
 model = EVA(data=log_losses)
-model.get_extremes(method="POT", threshold=0.022)
+model.get_extremes(method="POT", threshold=0.024)
 
 with Pool(10) as pool:
     model.fit_model(
@@ -557,86 +569,95 @@ model.plot_corner()
 trace = model.model.trace
 trace.shape[1] // 2
 burn_in = trace.shape[1] // 2
-samples = trace[:, burn_in:, :].reshape(-1, trace.shape[2])
+samples_naive = trace[:, burn_in:, :].reshape(-1, trace.shape[2])
 ```
 
-Calculatin naive VaR and ES
+The diagnostic plot suggests an adequate overall fit, comparable to the conditional analysis. However, the trace and corner plots reveal an anomaly in the scale parameter $\sigma$: the posterior places non-negligible mass on negative values, indicating that the MCMC sampler explored regions of the parameter space that are theoretically inadmissible. This is addressed in the return level calculations by restricting inference to samples with $\xi > 0$ and $\sigma > 0$.
+
+### Calculating return levels
+
+Using the posterior distribution of $(\xi, \sigma)$, return levels are computed by substituting the $T$-year confidence level into the standard POT formula, for $T \in \{1, 5, 10, 20, 50\}$ years.
 
 ```{python}
-u = 0.022
-n_u = len(model.extremes)  # empirical number of exceedances
+u = 0.024
+n_u = len(model.extremes)  
 n = len(log_losses)
 f_bar_u = n_u / n
-alpha = 0.99
-
-VaR_log_posterior = np.array(  # VaR on standardised residuals
+T_values = [1, 5, 10, 20, 50]
+alpha_naive = 1 - 1/(np.array(T_values)*250)
+results_naive = {}
+for T, a in zip(T_values, alpha_naive):
+    results_naive[T] = np.array(  
     [
-        u + s[1] / s[0] * (((1 - alpha) / f_bar_u) ** (-s[0]) - 1)
-        for s in samples
-        if s[0] > 0
+        u + s[1] / s[0] * (((1 - a) / f_bar_u) ** (-s[0]) - 1)
+        for s in samples_naive
+        if s[0] > 0 and s[1] > 0
+
     ]
 )
-
-ES_log_posterior = []
-for s in samples:
-    if s[0] > 0:
-        var_s = u + s[1] / s[0] * (((1 - alpha) / f_bar_u) ** (-s[0]) - 1)
-        es_s = var_s / (1 - s[0]) + (s[1] - s[0] * u) / (1 - s[0])
-        ES_log_posterior.append(es_s)
-ES_log_posterior = np.array(ES_log_posterior)
-
-VaR_10d = np.median(VaR_log_posterior) * np.sqrt(10)  # Calculatin 10 day VaR
-ci_lower, ci_upper = np.percentile(VaR_log_posterior, [2.5, 97.5]) * np.sqrt(10)
-
-print(
-    f"10-Tages VaR_{alpha}: {(1 - np.exp(-VaR_10d)) * 100:.2f}% "
+for T, r in results_naive.items():
+    r_med = np.median(r)
+    ci_lower, ci_upper = np.percentile(r, [2.5, 97.5])
+    print(
+    f"{T}-year VaR_{T}: {(1 - np.exp(-r_med)) * 100:.2f}% "
     f"[{(1 - np.exp(-ci_lower)) * 100:.2f}%, "
-    f"{(1 - np.exp(-ci_upper)) * 100:.2f}%]"
-)
-
-ES_10d = np.median(ES_log_posterior) * np.sqrt(10)
-ci_lower, ci_upper = np.percentile(ES_log_posterior, [2.5, 97.5]) * np.sqrt(10)
-
-print(
-    f"10-Tages ES_{alpha}: {(1 - np.exp(-ES_10d)) * 100:.2f}% "
-    f"[{(1 - np.exp(-ci_lower)) * 100:.2f}%, "
-    f"{(1 - np.exp(-ci_upper)) * 100:.2f}%]"
-)
+    f"{(1 - np.exp(-ci_upper)) * 100:.2f}%]")
 ```
-Negative ES in the intervall! Checking Posteriorsamples
 
 ```{python}
-print(f"VaR posterior: min={np.min(VaR_log_posterior):.4f}, max={np.max(VaR_log_posterior):.4f}")
-print(f"ES posterior: min={np.min(ES_log_posterior):.4f}, max={np.max(ES_log_posterior):.4f}")
-print(f"Negative ES samples: {np.sum(ES_log_posterior < 0)}")
-print(f"Anteil: {np.sum(ES_log_posterior < 0)/len(ES_log_posterior):.1%}")
+T_values = [1, 5, 10, 20, 50]
+medians = [np.median(results_naive[T]) for T in T_values]
+ci_lower = [np.percentile(results_naive[T], 2.5) for T in T_values]
+ci_upper = [np.percentile(results_naive[T], 97.5) for T in T_values]
+
+# Convert from log-loss to simple return
+medians_pct = [(1 - np.exp(-m)) * 100 for m in medians]
+ci_lower_pct = [(1 - np.exp(-c)) * 100 for c in ci_lower]
+ci_upper_pct = [(1 - np.exp(-c)) * 100 for c in ci_upper]
+
+fig, ax = plt.subplots(figsize=(10, 5))
+ax.plot(T_values, medians_pct, "o-", color="red", lw=2, label="Return Level (median)")
+ax.fill_between(T_values, ci_lower_pct, ci_upper_pct, color="red", alpha=0.2, label="95% Credible Interval")
+ax.set_xlabel("Return Period (years)")
+ax.set_ylabel("Loss (%)")
+ax.set_title("S&P 500 — Return Levels (Unconditional POT)")
+ax.legend()
+plt.tight_layout()
+plt.show()
 ```
 
-Looks not dramatic => using allowed boundaries
+The return levels increase concavely with the return period, as expected under a heavy-tailed but finite-mean distribution ($\hat{\xi} < 1$). Credible intervals widen substantially at longer horizons, reflecting the compounding of parameter uncertainty — particularly in $\xi$ — as the return period moves further into the tail. The 50-year return level of roughly 15% carries a 95% credible interval spanning nearly 15 percentage points, underscoring the inherent difficulty of long-horizon tail estimation from finite samples.
 
-```{python}
-clean_mask = (VaR_log_posterior > 0) & (ES_log_posterior > 0)
-VaR_clean = VaR_log_posterior[clean_mask]
-ES_clean = ES_log_posterior[clean_mask]
+## Conclusion
 
-print(
-    f"Gültige Samples: {clean_mask.sum()}/{len(clean_mask)} ({clean_mask.mean():.1%})"
-)
+As McNeil & Frey (2000) demonstrated, conditional and unconditional POT analysis 
+are not competing approaches but complementary ones, as they address fundamentally 
+different questions. The conditional model — combining GARCH pre-filtering with 
+GPD tail estimation — is suited for short-term risk management: it captures the 
+current volatility regime and produces dynamic VaR and ES estimates that respond 
+to changing market conditions. The unconditional model, applied directly to the 
+raw log-loss series, is better suited for long-run tail characterisation via 
+return levels, provided that the tail behaviour of the return series is sufficiently stable 
+over the sample period — an assumption that is difficult to verify over a 
+46-year window but is at least partially mitigated by the use of a long sample 
+that covers multiple structural regimes.
+.
 
-VaR_10d = np.median(VaR_clean) * np.sqrt(10)
-ES_10d = np.median(ES_clean) * np.sqrt(10)
-ci_var = np.percentile(VaR_clean, [2.5, 97.5]) * np.sqrt(10)
-ci_es = np.percentile(ES_clean, [2.5, 97.5]) * np.sqrt(10)
+A further methodological contribution of this project is the use of Bayesian 
+inference via MCMC rather than maximum likelihood estimation for the GPD parameters. 
+Since different parameter values can have substantial consequences for risk measure 
+estimates, propagating the full posterior distribution through the VaR and ES 
+formulas provides a more honest account of estimation uncertainty than a single 
+point estimate would.
 
-print(
-    f"VaR: {(1 - np.exp(-VaR_10d)) * 100:.2f}% [{(1 - np.exp(-ci_var[0])) * 100:.2f}%, {(1 - np.exp(-ci_var[1])) * 100:.2f}%]"
-)
-print(
-    f"ES: {(1 - np.exp(-ES_10d)) * 100:.2f}% [{(1 - np.exp(-ci_es[0])) * 100:.2f}%, {(1 - np.exp(-ci_es[1])) * 100:.2f}%]"
-)
-```
-
-
-
+The rolling-window backtest over `{python} n_years_bt` years yields an empirical 
+violation rate close to the nominal 1%, and the Kupiec test does not reject correct 
+unconditional coverage ($p =$ `{python} f"{p_value:.2f}"`). The main limitation 
+is violation clustering: the Christoffersen independence test rejects at the 5% 
+level ($p =$ `{python} f"{p_ind:.3f}"`), and the conditional coverage test is 
+borderline ($p =$ `{python} f"{p_cc:.2f}"`). This residual dependence reflects 
+the well-known limitations of GARCH(1,1) — its symmetric treatment of positive 
+and negative shocks and its Gaussian innovation assumption — and motivates natural 
+extensions such as GJR-GARCH or a Student-$t$ innovation distribution.
 
 
