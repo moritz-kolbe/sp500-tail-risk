@@ -25,7 +25,7 @@ import pandas as pd
 import numpy as np
 import pyextremes
 from pyextremes import EVA 
-from scipy.stats import chi2, genpareto
+from scipy.stats import chi2, genpareto, 
 import matplotlib.pyplot as plt
 import seaborn as sns 
 import pyextremes
@@ -360,10 +360,15 @@ Since backtesting is conducted at the 99% level, only `{python} n_viol` violatio
 ```{python}
 es_empirical = actual_losses[violations_clean].mean()
 es_estimated = es_clean[violations_clean].mean()
-print(f"ES estimated (mean on violation days): {es_estimated*100:.2f}%")
-print(f"ES empirical (mean realized loss):     {es_empirical*100:.2f}%")
+print(f"ES estimated (mean on violation days): {es_estimated * 100:.2f}%")
+print(f"ES empirical (mean realized loss):     {es_empirical * 100:.2f}%")
 
-difference = es_empirical-es_estimated
+difference = es_empirical - es_estimated
+
+exceedance_residuals = (
+    actual_losses[violations_clean] - es_clean[violations_clean]
+) / es_clean[violations_clean]
+critical_value = t.sf()
 ```
 
 The estimated ES falls short of the empirical mean loss on violation days by  roughly `{python} f"{difference:.2f}"` percentage points. This is consistent 
