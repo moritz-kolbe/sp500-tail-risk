@@ -7,6 +7,48 @@ format:
     toc-title: "Contents"
 ---
 
+::::: {.callout-note appearance="simple" icon=false title="Visual Abstract"}
+
+:::: {.columns}
+
+::: {.column width="32%"}
+**Approach**
+
+A conditional EVT model: a GARCH(1,1) filter removes volatility clustering, then
+Peaks-over-Threshold (GPD) is fit to the standardized residuals. Parameters are
+estimated by Bayesian MCMC (`emcee`), so every risk measure carries a credible
+interval. An unconditional POT variant adds multi-year return levels.
+:::
+
+::: {.column width="2%"}
+:::
+
+::: {.column width="32%"}
+**Key Finding**
+
+The 99% VaR is validated out-of-sample over ~10,700 days (1983–2026): a 1.04%
+violation rate against a 1% nominal target. Unconditional coverage holds
+(Kupiec $p \approx 0.70$), but violations still cluster in crises (Christoffersen
+independence rejected, $p \approx 0.04$) — GARCH(1,1) removes most, not all, tail
+dependence. Over a 10-day horizon, naive $\sqrt{t}$ scaling overstates the
+cumulative tail (8.3% vs. 7.8% from path simulation).
+:::
+
+::: {.column width="2%"}
+:::
+
+::: {.column width="32%"}
+**Takeaway**
+
+The model gets the *frequency* of extreme losses right, but not their *timing*.
+Asymmetric volatility (GJR-GARCH) and heavier-tailed innovations (Student-$t$)
+are the natural refinement, and forward path simulation — not $\sqrt{t}$ scaling —
+is required for horizons beyond a single day.
+:::
+
+::::
+
+:::::
 
 ## Problem Statement and Objectives
 This project demonstrates two complementary approaches to tail risk estimation 
@@ -30,11 +72,10 @@ volatility state.
 import pandas as pd
 import numpy as np
 import pyextremes
-from pyextremes import EVA 
+from pyextremes import EVA
 from scipy.stats import chi2, genpareto, ttest_1samp
 import matplotlib.pyplot as plt
-import seaborn as sns 
-import pyextremes
+import seaborn as sns
 from arch import arch_model
 import yfinance as yf
 from multiprocessing import Pool
@@ -49,7 +90,7 @@ stock doesn't capture how a portfolio behaves in the tails of the return
 distribution. To address this more realistically, multivariate extreme value 
 modelling would be needed (forthcoming). 
 
-####  Choice of Sample Period
+#### Choice of Sample Period
 
 I use daily S&P 500 closing prices from 1980 onwards. There are two main reasons for this long sample window.
 
@@ -57,7 +98,7 @@ I use daily S&P 500 closing prices from 1980 onwards. There are two main reasons
 prices = yf.download("^GSPC", start="1980-01-01", progress=False)[
     "Close"
 ]  # on single stocks Adj.Close
-returns_dec = prices.pct_change().dropna().squeeze()  # squeze for series format
+returns_dec = prices.pct_change(fill_method=None).dropna().squeeze()  # squeeze for series format
 log_losses = -np.log(prices / prices.shift(1)).dropna().squeeze()
 n_years = (returns_dec.index[-1] - returns_dec.index[0]).days / 365.25
 n_obs = len(returns_dec)
@@ -66,7 +107,7 @@ n_obs = len(returns_dec)
 fig, axes = plt.subplots(1, 2, figsize=(16, 5))
 axes[0].plot(prices.index, prices.values)
 axes[1].plot(returns_dec.index, returns_dec.values)
-axes[0].set_title("S&P 500 Price Devlopment")
+axes[0].set_title("S&P 500 Price Development")
 axes[1].set_title("S&P 500 %-Returns")
 plt.tight_layout()
 plt.show()
@@ -176,7 +217,6 @@ model.plot_corner()
 trace = model.model.trace
 burn_in = trace.shape[1] // 2
 samples = trace[:, burn_in:, :].reshape(-1, trace.shape[2])
-s_xi = samples.mean(axis=0)
 print(f"xi (posterior mean): {samples[:, 0].mean():.3f}")
 
 xi_mean = samples[:, 0].mean()
@@ -187,7 +227,7 @@ tail_index = 1 / xi_mean
 
 The chains mix well: both parameters fluctuate around a stable level from early on, with no drift, stickiness, or visible regime changes. The posterior of $\xi$ is reasonably concentrated  (roughly $\xi \in$ [`{python} f"{xi_lo:.2f}"`, `{python} f"{xi_hi:.2f}"`]), smooth, and unimodal, with no outlying mass. The corner plot reveals a clear negative correlation between $\xi$ and $\sigma$, which is a well-known feature of the GPD likelihood — the two parameters are not orthogonal, so estimation uncertainty in one partly compensates for the other.
 
-With $\hat{\xi} \approx$ `{python} f"{xi_mean:.2f}"`, the implied tail index is $1/\xi \approx$ `{python} f"{tail_index:.0f}"`.$. This means that moments of order $k < 4$ exist, while the **fourth moment (kurtosis) is already infinite — a plausible result for daily equity losses and consistent with the heavy-tailed behaviour typically observed in financial return series.
+With $\hat{\xi} \approx$ `{python} f"{xi_mean:.2f}"`, the implied tail index is $1/\xi \approx$ `{python} f"{tail_index:.0f}"`. This means that moments of order $k < 4$ exist, while the **fourth moment (kurtosis) is already infinite** — a plausible result for daily equity losses and consistent with the heavy-tailed behaviour typically observed in financial return series.
 
 > **Note:** The $R^2$ values, posterior intervals, and tail index quoted above 
 > reflect a model run on data through April 2026 and will change slightly with 
@@ -209,7 +249,7 @@ $$
 \operatorname{ES}_\alpha = \frac{\operatorname{VaR}_\alpha + \beta - \xi u}{1 - \xi}, \qquad \xi < 1,
 $$
 
-where the condition $\xi < 1$ ensures that $\operatorname{ES}_\alpha$ is finite. With $\hat{\xi} \approx 0.25$ this is comfortably satisfied.
+where the condition $\xi < 1$ ensures that $\operatorname{ES}_\alpha$ is finite. With $\hat{\xi} \approx$ `{python} f"{xi_mean:.2f}"` this is comfortably satisfied.
 
 Since the model was estimated via `emcee`, I propagate the full posterior of $(\xi, \beta)$ through both formulas instead of relying on point estimates only, which allows uncertainty to be reflected in credible intervals for $\operatorname{VaR}_\alpha$ and $\operatorname{ES}_\alpha$.
 
@@ -287,7 +327,7 @@ es_clean = es_estimates[valid_var]
 
 ```{python}
 n_obs = len(violations_clean)
-n_viol = violations_clean.sum()
+n_viol = int(violations_clean.sum())
 print(f"Violations: {n_viol}/{n_obs} ({n_viol / n_obs:.4f})")
 print(f"Expected: {n_obs * 0.01:.0f} ({0.01})")
 
@@ -381,9 +421,7 @@ The null hypothesis of mean-zero residuals is not rejected at the 5% level ($t =
 
 ### 10-Day Forecast
 
-Standard scaling (`VaR_z · σ_h`) implicitly assumes that the *h*-day standardised return has the same distribution as the 1-day innovation. Under iid-like residuals this is fine for the daily VaR path (each horizon is still a 1-day quantile, only σh\sigma_h
-σh​ changes), but not for the cumulative 10-day loss: a sum of hh
-h heavy-tailed variables drifts toward a thinner-tailed limit (CLT), so cumulative scaling overstates the true tail. To handle this consistently I simulate forward paths using HS-GARCH-EVT approach (McNeil & Frey, 2000): the GARCH(1,1) recursion is propagated with innovations drawn from the empirical residual distribution below the threshold and from the fitted GPD above it. This gives both the daily VaR/ES path and the proper 10-day aggregate distribution, and lets me read off the comparison to naive scaling directly. For comparison, the naive square-root-of-time scaling rule is included. As expected, it systematically overstates both VaR and ES.
+Standard scaling (`VaR_z · σ_h`) implicitly assumes that the *h*-day standardised return has the same distribution as the 1-day innovation. Under iid-like residuals this is fine for the daily VaR path (each horizon is still a 1-day quantile, only $\sigma_h$ changes), but not for the cumulative 10-day loss: a sum of $h$ heavy-tailed variables drifts toward a thinner-tailed limit (CLT), so cumulative scaling overstates the true tail. To handle this consistently I simulate forward paths using the HS-GARCH-EVT approach (McNeil & Frey, 2000): the GARCH(1,1) recursion is propagated with innovations drawn from the empirical residual distribution below the threshold and from the fitted GPD above it. This gives both the daily VaR/ES path and the proper 10-day aggregate distribution, and lets me read off the comparison to naive scaling directly. For comparison, the naive square-root-of-time scaling rule is included. As expected, it systematically overstates both VaR and ES.
 
 ```{python}
 def simulate_garch_evt(
@@ -449,7 +487,7 @@ es_cum_mc    = cum_loss[cum_loss >= var_cum_mc].mean()
 
 # --- Naive scaling for comparison ---
 fc        = result.forecast(horizon=10, reindex=False)
-sigma_fc  = np.sqrt(fc.variance.values[-1, :])   # daily σ_h, in %
+sigma_fc  = np.sqrt(fc.variance.values[-1, :])   # daily sigma_h, in %
 sigma_10d = np.sqrt(np.sum(sigma_fc ** 2))
 
 var_path_scaled = varz_med * sigma_fc
@@ -552,7 +590,6 @@ print(f"Exceedances at u=0.02: {np.sum(log_losses > 0.02)}")
 print(f"Exceedances at u=0.0225: {np.sum(log_losses > 0.0225)}")
 print(f"Exceedances at u=0.024: {np.sum(log_losses > 0.024)}")
 n_exceed_u_2 = int(np.sum(log_losses > 0.024))
- 
 ```
 
 Despite the instability in the parameter plots, the exceedance count of `{python} n_exceed_u_2` at $u = 0.024$ provides a sufficient basis for GPD estimation, and I proceed with this threshold.
@@ -573,7 +610,6 @@ model.plot_diagnostic()
 model.plot_trace()
 model.plot_corner()
 trace = model.model.trace
-trace.shape[1] // 2
 burn_in = trace.shape[1] // 2
 samples_naive = trace[:, burn_in:, :].reshape(-1, trace.shape[2])
 ```
@@ -647,7 +683,6 @@ return levels, provided that the tail behaviour of the return series is sufficie
 over the sample period — an assumption that is difficult to verify over a 
 46-year window but is at least partially mitigated by the use of a long sample 
 that covers multiple structural regimes.
-.
 
 A further methodological contribution of this project is the use of Bayesian 
 inference via MCMC rather than maximum likelihood estimation for the GPD parameters. 
@@ -665,5 +700,3 @@ borderline ($p =$ `{python} f"{p_cc:.2f}"`). This residual dependence reflects
 the well-known limitations of GARCH(1,1) — its symmetric treatment of positive 
 and negative shocks and its Gaussian innovation assumption — and motivates natural 
 extensions such as GJR-GARCH or a Student-$t$ innovation distribution.
-
-
