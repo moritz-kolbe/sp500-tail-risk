@@ -161,6 +161,34 @@ window.Quarto = {
 </header>
 
 
+<div class="callout callout-style-simple callout-note no-icon callout-titled" title="Visual Abstract">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon no-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Visual Abstract
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<div class="columns">
+<div class="column" style="width:32%;">
+<p><strong>Approach</strong></p>
+<p>A conditional EVT model: a GARCH(1,1) filter removes volatility clustering, then Peaks-over-Threshold (GPD) is fit to the standardized residuals. Parameters are estimated by Bayesian MCMC (<code>emcee</code>), so every risk measure carries a credible interval. An unconditional POT variant adds multi-year return levels.</p>
+</div><div class="column" style="width:2%;">
+
+</div><div class="column" style="width:32%;">
+<p><strong>Key Finding</strong></p>
+<p>The 99% VaR is validated out-of-sample over ~10,700 days (1983–2026): a 1.04% violation rate against a 1% nominal target. Unconditional coverage holds (Kupiec <span class="math inline">\(p \approx 0.70\)</span>), but violations still cluster in crises (Christoffersen independence rejected, <span class="math inline">\(p \approx 0.04\)</span>) — GARCH(1,1) removes most, not all, tail dependence. Over a 10-day horizon, naive <span class="math inline">\(\sqrt{t}\)</span> scaling overstates the cumulative tail (8.3% vs.&nbsp;7.8% from path simulation).</p>
+</div><div class="column" style="width:2%;">
+
+</div><div class="column" style="width:32%;">
+<p><strong>Takeaway</strong></p>
+<p>The model gets the <em>frequency</em> of extreme losses right, but not their <em>timing</em>. Asymmetric volatility (GJR-GARCH) and heavier-tailed innovations (Student-<span class="math inline">\(t\)</span>) are the natural refinement, and forward path simulation — not <span class="math inline">\(\sqrt{t}\)</span> scaling — is required for horizons beyond a single day.</p>
+</div>
+</div>
+</div>
+</div>
 <section id="problem-statement-and-objectives" class="level2">
 <h2 class="anchored" data-anchor-id="problem-statement-and-objectives">Problem Statement and Objectives</h2>
 <p>This project demonstrates two complementary approaches to tail risk estimation for the S&amp;P 500. The first applies a GARCH(1,1) filter prior to POT analysis, yielding a conditional EVT model in which risk measures vary with the current volatility regime. This approach is suited for short-term risk management: it produces dynamic <span class="math inline">\(\text{VaR}_{\alpha}\)</span> and <span class="math inline">\(\text{ES}_{\alpha}\)</span> estimates that can be validated via rolling-window backtesting (Kupiec and Christoffersen tests) and used for 10-day forward forecasts via filtered historical simulation. The second approach applies POT directly to the raw log-losses. While this unconditional model is too static for day-to-day risk management, it is the natural framework for long-run tail characterisation: return levels and return periods, which describe the magnitude and frequency of extreme losses without reference to a specific volatility state.</p>
@@ -169,19 +197,18 @@ window.Quarto = {
 <h2 class="anchored" data-anchor-id="preparation">Preparation</h2>
 <section id="package-loading" class="level3">
 <h3 class="anchored" data-anchor-id="package-loading">Package-Loading</h3>
-<div id="5aa2d7ba" class="cell" data-execution_count="1">
+<div id="97ee2cad" class="cell" data-execution_count="1">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pyextremes</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> pyextremes <span class="im">import</span> EVA </span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> pyextremes <span class="im">import</span> EVA</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> scipy.stats <span class="im">import</span> chi2, genpareto, ttest_1samp</span>
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> seaborn <span class="im">as</span> sns </span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pyextremes</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> arch <span class="im">import</span> arch_model</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> yfinance <span class="im">as</span> yf</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> multiprocessing <span class="im">import</span> Pool</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> VaR_backtest_utils <span class="im">import</span> backtest_single, init_worker</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> seaborn <span class="im">as</span> sns</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> arch <span class="im">import</span> arch_model</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> yfinance <span class="im">as</span> yf</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> multiprocessing <span class="im">import</span> Pool</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> VaR_backtest_utils <span class="im">import</span> backtest_single, init_worker</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </section>
 <section id="loading-data---sp500" class="level3">
@@ -190,11 +217,11 @@ window.Quarto = {
 <section id="choice-of-sample-period" class="level4">
 <h4 class="anchored" data-anchor-id="choice-of-sample-period">Choice of Sample Period</h4>
 <p>I use daily S&amp;P 500 closing prices from 1980 onwards. There are two main reasons for this long sample window.</p>
-<div id="ab4efa82" class="cell" data-execution_count="2">
+<div id="b2832767" class="cell" data-execution_count="2">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>prices <span class="op">=</span> yf.download(<span class="st">"^GSPC"</span>, start<span class="op">=</span><span class="st">"1980-01-01"</span>, progress<span class="op">=</span><span class="va">False</span>)[</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Close"</span></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>]  <span class="co"># on single stocks Adj.Close</span></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>returns_dec <span class="op">=</span> prices.pct_change().dropna().squeeze()  <span class="co"># squeze for series format</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>returns_dec <span class="op">=</span> prices.pct_change(fill_method<span class="op">=</span><span class="va">None</span>).dropna().squeeze()  <span class="co"># squeeze for series format</span></span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>log_losses <span class="op">=</span> <span class="op">-</span>np.log(prices <span class="op">/</span> prices.shift(<span class="dv">1</span>)).dropna().squeeze()</span>
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>n_years <span class="op">=</span> (returns_dec.index[<span class="op">-</span><span class="dv">1</span>] <span class="op">-</span> returns_dec.index[<span class="dv">0</span>]).days <span class="op">/</span> <span class="fl">365.25</span></span>
 <span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>n_obs <span class="op">=</span> <span class="bu">len</span>(returns_dec)</span>
@@ -203,23 +230,19 @@ window.Quarto = {
 <span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(<span class="dv">1</span>, <span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">16</span>, <span class="dv">5</span>))</span>
 <span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].plot(prices.index, prices.values)</span>
 <span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].plot(returns_dec.index, returns_dec.values)</span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_title(<span class="st">"S&amp;P 500 Price Devlopment"</span>)</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].set_title(<span class="st">"S&amp;P 500 Price Development"</span>)</span>
 <span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">1</span>].set_title(<span class="st">"S&amp;P 500 %-Returns"</span>)</span>
 <span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
 <span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stderr">
-<pre><code>/var/folders/94/d2dwh9nn7s75jjj78klfc9zr0000gn/T/ipykernel_79317/2192551103.py:4: FutureWarning: The default fill_method='pad' in DataFrame.pct_change is deprecated and will be removed in a future version. Either fill in any non-leading NA values prior to calling pct_change or specify 'fill_method=None' to not fill NA values.
-  returns_dec = prices.pct_change().dropna().squeeze()  # squeze for series format</code></pre>
-</div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="SP500_POT_Analysis_files/figure-html/cell-3-output-2.png" width="1526" height="470" class="figure-img"></p>
+<p><img src="SP500_POT_Analysis_files/figure-html/cell-3-output-1.png" width="1526" height="470" class="figure-img"></p>
 </figure>
 </div>
 </div>
 </div>
-<p>First, EVT relies on a sufficient number of tail observations. With roughly 46 years of daily data, the sample contains over 11,703 returns and several hundred exceedances even at high thresholds, which gives the GPD estimates a comfortable basis.</p>
+<p>First, EVT relies on a sufficient number of tail observations. With roughly 46 years of daily data, the sample contains over 11,702 returns and several hundred exceedances even at high thresholds, which gives the GPD estimates a comfortable basis.</p>
 <p>Second, the sample covers a wide range of structurally different crisis episodes — Black Monday (1987), the dot-com crash (2000–2002), the global financial crisis (2007–2009), the European sovereign debt crisis (2011), the COVID-19 shock (March 2020), and the 2022 inflation regime. This diversity makes the estimated tail behaviour less dependent on any single episode and arguably more representative of the kinds of extremes a risk manager has to anticipate.</p>
 <p>The main caveat is stationarity: over a window of this length, market microstructure, regulation, and the index composition itself have changed substantially, so strict stationarity is implausible for the raw return series. The GARCH pre-whitening step addresses part of this concern by absorbing time-varying volatility into the conditional variance, leaving the standardised residuals as the object on which the (much weaker) stationarity assumption is then imposed.</p>
 </section>
@@ -235,11 +258,11 @@ window.Quarto = {
 X_t = \sigma_t Z_t, \qquad \sigma_t^2 = \alpha_0 + \sum_{i=1}^{p} \alpha_i X_{t-i}^2 + \sum_{j=1}^{q} \beta_j \sigma_{t-j}^2.
 \]</span></p>
 <p>The basic idea is that periods of high volatility persist through large values of either <span class="math inline">\(|X_{t-i}|\)</span> or <span class="math inline">\(\sigma_{t-j}\)</span>. I use a simple GARCH(1,1), where persistence enters through <span class="math inline">\(|X_{t-1}|\)</span> and <span class="math inline">\(\sigma_{t-1}\)</span> only. Note that this does not restrict persistence to a single lag: through the recursive structure of <span class="math inline">\(\sigma_t^2\)</span>, shocks from much earlier periods continue to propagate via <span class="math inline">\(\sigma_{t-1}\)</span>.</p>
-<div id="438b834a" class="cell" data-execution_count="3">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>garch <span class="op">=</span> arch_model(returns_dec<span class="op">*</span><span class="dv">100</span>, vol<span class="op">=</span><span class="st">'GARCH'</span>, p<span class="op">=</span><span class="dv">1</span>, q<span class="op">=</span><span class="dv">1</span>)</span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> garch.fit(disp<span class="op">=</span><span class="st">'off'</span>)</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>std_resid <span class="op">=</span> result.resid <span class="op">/</span> result.conditional_volatility</span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>losses <span class="op">=</span> <span class="op">-</span>std_resid.dropna()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div id="188c44c4" class="cell" data-execution_count="3">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>garch <span class="op">=</span> arch_model(returns_dec<span class="op">*</span><span class="dv">100</span>, vol<span class="op">=</span><span class="st">'GARCH'</span>, p<span class="op">=</span><span class="dv">1</span>, q<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> garch.fit(disp<span class="op">=</span><span class="st">'off'</span>)</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>std_resid <span class="op">=</span> result.resid <span class="op">/</span> result.conditional_volatility</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>losses <span class="op">=</span> <span class="op">-</span>std_resid.dropna()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <p>Although the model implicitly assumes a normal distribution for the innovations <span class="math inline">\(Z_t\)</span>, this is not a concern for the subsequent analysis: the standardised residuals are clearly non-normal, and it is precisely those that feed into the POT step. For inference on <span class="math inline">\(\operatorname{VaR}_\alpha\)</span> and <span class="math inline">\(\operatorname{ES}_\alpha\)</span> we only rely on the conditional volatility <span class="math inline">\(\hat{\sigma}_t\)</span>, so the normality assumption matters only insofar as it shapes the likelihood used to estimate the recursion parameters <span class="math inline">\(\alpha_0\)</span>, <span class="math inline">\(\alpha_1\)</span>, and <span class="math inline">\(\beta_1\)</span>.</p>
 <p>While maximum likelihood estimation is generally only consistent under a correctly specified distribution, Bollerslev and Wooldridge (1992) showed that the Gaussian likelihood yields consistent estimates of the GARCH parameters even when <span class="math inline">\(Z_t\)</span> is not normal — this is the Quasi-Maximum-Likelihood (QML) result. The intuition is that the score of the Gaussian log-likelihood has mean zero as long as the conditional mean and variance are correctly specified; the shape of the innovation distribution beyond the first two conditional moments does not enter the first-order conditions. QML estimates are consistent but not efficient, which is reflected in larger standard errors. The <code>arch</code> package accounts for this by reporting Bollerslev–Wooldridge robust (sandwich) standard errors by default.</p>
@@ -247,9 +270,9 @@ X_t = \sigma_t Z_t, \qquad \sigma_t^2 = \alpha_0 + \sum_{i=1}^{p} \alpha_i X_{t-
 <section id="choosing-the-threshold-u" class="level3">
 <h3 class="anchored" data-anchor-id="choosing-the-threshold-u">Choosing the Threshold <span class="math inline">\(u\)</span></h3>
 <p>For the choice of the threshold <span class="math inline">\(u\)</span>, I use <code>plot_mean_residual_life</code> and <code>plot_parameter_stability</code> from the <code>pyextremes</code> package.</p>
-<div id="b776ff2f" class="cell" data-execution_count="4">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>pyextremes.plot_mean_residual_life(losses)</span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div id="899584cb" class="cell" data-execution_count="4">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>pyextremes.plot_mean_residual_life(losses)</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
@@ -263,9 +286,9 @@ E[X - u \mid X &gt; u] = \frac{\sigma_u + \xi u}{1 - \xi}.
 \]</span></p>
 <p>The mean-residual-life plot should therefore become approximately linear above a valid threshold. Here, linearity roughly holds for <span class="math inline">\(u \gtrsim 2.0\)</span>. Beyond <span class="math inline">\(u \approx 3.0\)</span>, the estimate becomes erratic and the confidence bands widen substantially, reflecting the small number of exceedances at such high levels. This suggests a threshold somewhere in the interval <span class="math inline">\([2.0, 3.0]\)</span>.</p>
 <p>To narrow this down, I check whether the GPD parameters are stable in this range. Under a correctly specified GPD above <span class="math inline">\(u\)</span>, the shape <span class="math inline">\(\xi\)</span> should be constant, and so should the modified scale <span class="math inline">\(\sigma^{*} = \sigma_u - \xi u\)</span> (the scale <span class="math inline">\(\sigma_u\)</span> itself is expected to vary linearly with <span class="math inline">\(u\)</span> and is therefore not a useful stability criterion).</p>
-<div id="1b64fef8" class="cell" data-execution_count="5">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>pyextremes.plot_parameter_stability(losses)</span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div id="76c6f265" class="cell" data-execution_count="5">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>pyextremes.plot_parameter_stability(losses)</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
@@ -275,11 +298,11 @@ E[X - u \mid X &gt; u] = \frac{\sigma_u + \xi u}{1 - \xi}.
 </div>
 </div>
 <p>Both parameters are reasonably stable for <span class="math inline">\(u \in [2.0, 2.5]\)</span>; beyond that, the variance of the estimators grows noticeably, likely due to the decreasing number of exceedances. The admissible range is thus <span class="math inline">\(u \in [2.0, 2.5]\)</span>. Before fixing <span class="math inline">\(u\)</span>, I check the number of exceedances at a few candidate levels:</p>
-<div id="74ea56e3" class="cell" data-execution_count="6">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exceedances at u = 2: </span><span class="sc">{</span>np<span class="sc">.</span><span class="bu">sum</span>(losses <span class="op">&gt;</span> <span class="fl">2.0</span>)<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exceedances at u = 2.2: </span><span class="sc">{</span>np<span class="sc">.</span><span class="bu">sum</span>(losses <span class="op">&gt;</span> <span class="fl">2.2</span>)<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>n_exceed_u <span class="op">=</span> <span class="bu">int</span>(np.<span class="bu">sum</span>(losses <span class="op">&gt;</span> <span class="fl">2.2</span>))</span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exceedances at u = 2.5: </span><span class="sc">{</span>np<span class="sc">.</span><span class="bu">sum</span>(losses <span class="op">&gt;</span> <span class="fl">2.5</span>)<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div id="1677a369" class="cell" data-execution_count="6">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exceedances at u = 2: </span><span class="sc">{</span>np<span class="sc">.</span><span class="bu">sum</span>(losses <span class="op">&gt;</span> <span class="fl">2.0</span>)<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exceedances at u = 2.2: </span><span class="sc">{</span>np<span class="sc">.</span><span class="bu">sum</span>(losses <span class="op">&gt;</span> <span class="fl">2.2</span>)<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>n_exceed_u <span class="op">=</span> <span class="bu">int</span>(np.<span class="bu">sum</span>(losses <span class="op">&gt;</span> <span class="fl">2.2</span>))</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exceedances at u = 2.5: </span><span class="sc">{</span>np<span class="sc">.</span><span class="bu">sum</span>(losses <span class="op">&gt;</span> <span class="fl">2.5</span>)<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>Exceedances at u = 2: 371
 Exceedances at u = 2.2: 272
@@ -292,22 +315,22 @@ Exceedances at u = 2.5: 164</code></pre>
 <h3 class="anchored" data-anchor-id="pot-analysis">POT Analysis</h3>
 <p>I now fit a POT model to the standardised residuals from the GARCH filter, again using <code>pyextremes</code>. Parameter estimation is performed via MCMC using the <code>emcee</code> sampler, which provides the full posterior distribution of <span class="math inline">\((\xi, \sigma_u)\)</span> rather than only point estimates. This allows for a proper quantification of parameter uncertainty and for constructing credible intervals on derived risk measures such as <span class="math inline">\(\operatorname{VaR}_\alpha\)</span> and <span class="math inline">\(\operatorname{ES}_\alpha\)</span>. A Bayesian approach is also attractive here because GPD maximum likelihood estimates are known to have poor finite-sample properties, especially when <span class="math inline">\(\xi\)</span> is small or negative.</p>
 <p>Sampling is parallelised across the 200 walkers of the emcee ensemble using <code>Pool</code> from the <code>multiprocessing</code> package. The number of worker processes should be set according to the available CPU cores on your machine.</p>
-<div id="c61c5813" class="cell" data-execution_count="7">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> EVA(data<span class="op">=</span>losses)</span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>model.get_extremes(method<span class="op">=</span><span class="st">"POT"</span>, threshold<span class="op">=</span><span class="fl">2.2</span>)</span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> Pool(<span class="dv">10</span>) <span class="im">as</span> pool:  <span class="co"># Adjust n_workers to the number of available CPU cores</span></span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>    model.fit_model(</span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>        distribution<span class="op">=</span><span class="st">"genpareto"</span>,</span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>        model<span class="op">=</span><span class="st">"Emcee"</span>,</span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>        n_walkers<span class="op">=</span><span class="dv">200</span>,</span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>        n_samples<span class="op">=</span><span class="dv">2000</span>,</span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>        pool<span class="op">=</span>pool</span>
-<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>    )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div id="4ca0d4fd" class="cell" data-execution_count="7">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> EVA(data<span class="op">=</span>losses)</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>model.get_extremes(method<span class="op">=</span><span class="st">"POT"</span>, threshold<span class="op">=</span><span class="fl">2.2</span>)</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> Pool(<span class="dv">10</span>) <span class="im">as</span> pool:  <span class="co"># Adjust n_workers to the number of available CPU cores</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    model.fit_model(</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>        distribution<span class="op">=</span><span class="st">"genpareto"</span>,</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>        model<span class="op">=</span><span class="st">"Emcee"</span>,</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>        n_walkers<span class="op">=</span><span class="dv">200</span>,</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>        n_samples<span class="op">=</span><span class="dv">2000</span>,</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>        pool<span class="op">=</span>pool</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>    )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <p>Having fitted the model, I look at the diagnostic plots and check whether the assumption of the model match the data.</p>
-<div id="75377764" class="cell" data-execution_count="8">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>model.plot_diagnostic()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-display" data-execution_count="30">
+<div id="18d4abb0" class="cell" data-execution_count="8">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>model.plot_diagnostic()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="8">
 <pre><code>(&lt;Figure size 768x768 with 4 Axes&gt;,
  (&lt;Axes: title={'center': 'Return value plot'}, xlabel='Return period', ylabel='extreme values'&gt;,
   &lt;Axes: title={'center': 'Probability density plot'}, ylabel='Probability density'&gt;,
@@ -326,22 +349,21 @@ Exceedances at u = 2.5: 164</code></pre>
 <p>The P-P plot is almost perfect (<span class="math inline">\(R^2 = 1.000\)</span>), but this is of limited diagnostic value for extreme value models: P-P plots compress the tails, so they are insensitive to exactly the region that matters most here. The Q-Q plot is the more informative diagnostic. The reported <span class="math inline">\(p\)</span>-values refer to the significance of the correlation between empirical and theoretical quantiles/probabilities (so <span class="math inline">\(p = 0.000\)</span> indicates a highly significant linear relationship, not rejection of the fit).</p>
 <p>Overall, the model appears adequate for risk measurement at moderately extreme quantiles, with the caveat that individual outliers beyond the bulk of the tail may be underestimated.</p>
 <p>Next, I check for anomalies in chain mixing and inspect the posterior distribution of the parameters.</p>
-<div id="3e2afb65" class="cell" data-execution_count="9">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>model.plot_trace()</span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>model.plot_corner()</span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>trace <span class="op">=</span> model.model.trace</span>
-<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>burn_in <span class="op">=</span> trace.shape[<span class="dv">1</span>] <span class="op">//</span> <span class="dv">2</span></span>
-<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>samples <span class="op">=</span> trace[:, burn_in:, :].reshape(<span class="op">-</span><span class="dv">1</span>, trace.shape[<span class="dv">2</span>])</span>
-<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>s_xi <span class="op">=</span> samples.mean(axis<span class="op">=</span><span class="dv">0</span>)</span>
-<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"xi (posterior mean): </span><span class="sc">{</span>samples[:, <span class="dv">0</span>]<span class="sc">.</span>mean()<span class="sc">:.3f}</span><span class="ss">"</span>)</span>
-<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>xi_mean <span class="op">=</span> samples[:, <span class="dv">0</span>].mean()</span>
-<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>xi_lo <span class="op">=</span> np.percentile(samples[:, <span class="dv">0</span>], <span class="fl">2.5</span>)</span>
-<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>xi_hi <span class="op">=</span> np.percentile(samples[:, <span class="dv">0</span>], <span class="fl">97.5</span>)</span>
-<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>tail_index <span class="op">=</span> <span class="dv">1</span> <span class="op">/</span> xi_mean</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div id="3ec6a593" class="cell" data-execution_count="9">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>model.plot_trace()</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>model.plot_corner()</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>trace <span class="op">=</span> model.model.trace</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>burn_in <span class="op">=</span> trace.shape[<span class="dv">1</span>] <span class="op">//</span> <span class="dv">2</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>samples <span class="op">=</span> trace[:, burn_in:, :].reshape(<span class="op">-</span><span class="dv">1</span>, trace.shape[<span class="dv">2</span>])</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"xi (posterior mean): </span><span class="sc">{</span>samples[:, <span class="dv">0</span>]<span class="sc">.</span>mean()<span class="sc">:.3f}</span><span class="ss">"</span>)</span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>xi_mean <span class="op">=</span> samples[:, <span class="dv">0</span>].mean()</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>xi_lo <span class="op">=</span> np.percentile(samples[:, <span class="dv">0</span>], <span class="fl">2.5</span>)</span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>xi_hi <span class="op">=</span> np.percentile(samples[:, <span class="dv">0</span>], <span class="fl">97.5</span>)</span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>tail_index <span class="op">=</span> <span class="dv">1</span> <span class="op">/</span> xi_mean</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>xi (posterior mean): 0.260</code></pre>
+<pre><code>xi (posterior mean): 0.262</code></pre>
 </div>
 <div class="cell-output cell-output-display">
 <div>
@@ -353,13 +375,13 @@ Exceedances at u = 2.5: 164</code></pre>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="SP500_POT_Analysis_files/figure-html/cell-10-output-3.png" width="667" height="651" class="figure-img"></p>
+<p><img src="SP500_POT_Analysis_files/figure-html/cell-10-output-3.png" width="663" height="651" class="figure-img"></p>
 </figure>
 </div>
 </div>
 </div>
 <p>The chains mix well: both parameters fluctuate around a stable level from early on, with no drift, stickiness, or visible regime changes. The posterior of <span class="math inline">\(\xi\)</span> is reasonably concentrated (roughly <span class="math inline">\(\xi \in\)</span> [0.12, 0.43]), smooth, and unimodal, with no outlying mass. The corner plot reveals a clear negative correlation between <span class="math inline">\(\xi\)</span> and <span class="math inline">\(\sigma\)</span>, which is a well-known feature of the GPD likelihood — the two parameters are not orthogonal, so estimation uncertainty in one partly compensates for the other.</p>
-<p>With <span class="math inline">\(\hat{\xi} \approx\)</span> 0.26, the implied tail index is <span class="math inline">\(1/\xi \approx\)</span> 4.$. This means that moments of order <span class="math inline">\(k &lt; 4\)</span> exist, while the **fourth moment (kurtosis) is already infinite — a plausible result for daily equity losses and consistent with the heavy-tailed behaviour typically observed in financial return series.</p>
+<p>With <span class="math inline">\(\hat{\xi} \approx\)</span> 0.26, the implied tail index is <span class="math inline">\(1/\xi \approx\)</span> 4. This means that moments of order <span class="math inline">\(k &lt; 4\)</span> exist, while the <strong>fourth moment (kurtosis) is already infinite</strong> — a plausible result for daily equity losses and consistent with the heavy-tailed behaviour typically observed in financial return series.</p>
 <blockquote class="blockquote">
 <p><strong>Note:</strong> The <span class="math inline">\(R^2\)</span> values, posterior intervals, and tail index quoted above reflect a model run on data through April 2026 and will change slightly with different data vintages or random seeds.</p>
 </blockquote>
@@ -374,40 +396,40 @@ Exceedances at u = 2.5: 164</code></pre>
 <p>the proportion of observations exceeding the threshold <span class="math inline">\(u\)</span>. Expected shortfall follows as <span class="math display">\[
 \operatorname{ES}_\alpha = \frac{\operatorname{VaR}_\alpha + \beta - \xi u}{1 - \xi}, \qquad \xi &lt; 1,
 \]</span></p>
-<p>where the condition <span class="math inline">\(\xi &lt; 1\)</span> ensures that <span class="math inline">\(\operatorname{ES}_\alpha\)</span> is finite. With <span class="math inline">\(\hat{\xi} \approx 0.25\)</span> this is comfortably satisfied.</p>
+<p>where the condition <span class="math inline">\(\xi &lt; 1\)</span> ensures that <span class="math inline">\(\operatorname{ES}_\alpha\)</span> is finite. With <span class="math inline">\(\hat{\xi} \approx\)</span> 0.26 this is comfortably satisfied.</p>
 <p>Since the model was estimated via <code>emcee</code>, I propagate the full posterior of <span class="math inline">\((\xi, \beta)\)</span> through both formulas instead of relying on point estimates only, which allows uncertainty to be reflected in credible intervals for <span class="math inline">\(\operatorname{VaR}_\alpha\)</span> and <span class="math inline">\(\operatorname{ES}_\alpha\)</span>.</p>
-<div id="1e27ccb5" class="cell" data-execution_count="10">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>u <span class="op">=</span> <span class="fl">2.2</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>n_u <span class="op">=</span> <span class="bu">len</span>(model.extremes)</span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>n <span class="op">=</span> <span class="bu">len</span>(losses)</span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>f_bar_u <span class="op">=</span> n_u <span class="op">/</span> n</span>
-<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>alpha <span class="op">=</span> <span class="fl">0.99</span></span>
-<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>xi, beta <span class="op">=</span> samples[:, <span class="dv">0</span>], samples[:, <span class="dv">1</span>]</span>
-<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>VaR_z <span class="op">=</span> u <span class="op">+</span> (beta <span class="op">/</span> xi) <span class="op">*</span> (((<span class="dv">1</span> <span class="op">-</span> alpha) <span class="op">/</span> f_bar_u) <span class="op">**</span> (<span class="op">-</span>xi) <span class="op">-</span> <span class="dv">1</span>)</span>
-<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>ES_z <span class="op">=</span> (VaR_z <span class="op">+</span> beta <span class="op">-</span> xi <span class="op">*</span> u) <span class="op">/</span> (<span class="dv">1</span> <span class="op">-</span> xi)</span>
-<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>forecast <span class="op">=</span> result.forecast(horizon<span class="op">=</span><span class="dv">1</span>, reindex<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>sigma_next <span class="op">=</span> np.sqrt(forecast.variance.values[<span class="op">-</span><span class="dv">1</span>, <span class="dv">0</span>])</span>
-<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>VaR_posterior <span class="op">=</span> VaR_z <span class="op">*</span> sigma_next</span>
-<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a>ES_posterior <span class="op">=</span> ES_z <span class="op">*</span> sigma_next</span>
-<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
-<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"Next-day VaR_</span><span class="sc">{</span>alpha<span class="sc">}</span><span class="ss">: </span><span class="sc">{</span>np<span class="sc">.</span>median(VaR_posterior)<span class="sc">:.2f}</span><span class="ss">% "</span></span>
-<span id="cb14-20"><a href="#cb14-20" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"[</span><span class="sc">{</span>np<span class="sc">.</span>percentile(VaR_posterior, <span class="fl">2.5</span>)<span class="sc">:.2f}</span><span class="ss">%, "</span></span>
-<span id="cb14-21"><a href="#cb14-21" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>np<span class="sc">.</span>percentile(VaR_posterior, <span class="fl">97.5</span>)<span class="sc">:.2f}</span><span class="ss">%]"</span></span>
-<span id="cb14-22"><a href="#cb14-22" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb14-23"><a href="#cb14-23" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-24"><a href="#cb14-24" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
-<span id="cb14-25"><a href="#cb14-25" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"Next-day ES_</span><span class="sc">{</span>alpha<span class="sc">}</span><span class="ss">: </span><span class="sc">{</span>np<span class="sc">.</span>median(ES_posterior)<span class="sc">:.2f}</span><span class="ss">% "</span></span>
-<span id="cb14-26"><a href="#cb14-26" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"[</span><span class="sc">{</span>np<span class="sc">.</span>percentile(ES_posterior, <span class="fl">2.5</span>)<span class="sc">:.2f}</span><span class="ss">%, "</span></span>
-<span id="cb14-27"><a href="#cb14-27" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>np<span class="sc">.</span>percentile(ES_posterior, <span class="fl">97.5</span>)<span class="sc">:.2f}</span><span class="ss">%]"</span></span>
-<span id="cb14-28"><a href="#cb14-28" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div id="13d6b008" class="cell" data-execution_count="10">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>u <span class="op">=</span> <span class="fl">2.2</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>n_u <span class="op">=</span> <span class="bu">len</span>(model.extremes)</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>n <span class="op">=</span> <span class="bu">len</span>(losses)</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>f_bar_u <span class="op">=</span> n_u <span class="op">/</span> n</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>alpha <span class="op">=</span> <span class="fl">0.99</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>xi, beta <span class="op">=</span> samples[:, <span class="dv">0</span>], samples[:, <span class="dv">1</span>]</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>VaR_z <span class="op">=</span> u <span class="op">+</span> (beta <span class="op">/</span> xi) <span class="op">*</span> (((<span class="dv">1</span> <span class="op">-</span> alpha) <span class="op">/</span> f_bar_u) <span class="op">**</span> (<span class="op">-</span>xi) <span class="op">-</span> <span class="dv">1</span>)</span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>ES_z <span class="op">=</span> (VaR_z <span class="op">+</span> beta <span class="op">-</span> xi <span class="op">*</span> u) <span class="op">/</span> (<span class="dv">1</span> <span class="op">-</span> xi)</span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>forecast <span class="op">=</span> result.forecast(horizon<span class="op">=</span><span class="dv">1</span>, reindex<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>sigma_next <span class="op">=</span> np.sqrt(forecast.variance.values[<span class="op">-</span><span class="dv">1</span>, <span class="dv">0</span>])</span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a>VaR_posterior <span class="op">=</span> VaR_z <span class="op">*</span> sigma_next</span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>ES_posterior <span class="op">=</span> ES_z <span class="op">*</span> sigma_next</span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb13-19"><a href="#cb13-19" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"Next-day VaR_</span><span class="sc">{</span>alpha<span class="sc">}</span><span class="ss">: </span><span class="sc">{</span>np<span class="sc">.</span>median(VaR_posterior)<span class="sc">:.2f}</span><span class="ss">% "</span></span>
+<span id="cb13-20"><a href="#cb13-20" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"[</span><span class="sc">{</span>np<span class="sc">.</span>percentile(VaR_posterior, <span class="fl">2.5</span>)<span class="sc">:.2f}</span><span class="ss">%, "</span></span>
+<span id="cb13-21"><a href="#cb13-21" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>np<span class="sc">.</span>percentile(VaR_posterior, <span class="fl">97.5</span>)<span class="sc">:.2f}</span><span class="ss">%]"</span></span>
+<span id="cb13-22"><a href="#cb13-22" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb13-23"><a href="#cb13-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-24"><a href="#cb13-24" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb13-25"><a href="#cb13-25" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"Next-day ES_</span><span class="sc">{</span>alpha<span class="sc">}</span><span class="ss">: </span><span class="sc">{</span>np<span class="sc">.</span>median(ES_posterior)<span class="sc">:.2f}</span><span class="ss">% "</span></span>
+<span id="cb13-26"><a href="#cb13-26" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"[</span><span class="sc">{</span>np<span class="sc">.</span>percentile(ES_posterior, <span class="fl">2.5</span>)<span class="sc">:.2f}</span><span class="ss">%, "</span></span>
+<span id="cb13-27"><a href="#cb13-27" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>np<span class="sc">.</span>percentile(ES_posterior, <span class="fl">97.5</span>)<span class="sc">:.2f}</span><span class="ss">%]"</span></span>
+<span id="cb13-28"><a href="#cb13-28" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>Next-day VaR_0.99: 2.60% [2.53%, 2.68%]
-Next-day ES_0.99: 3.48% [3.26%, 3.83%]</code></pre>
+<pre><code>Next-day VaR_0.99: 2.73% [2.66%, 2.82%]
+Next-day ES_0.99: 3.66% [3.43%, 4.03%]</code></pre>
 </div>
 </div>
 </section>
@@ -427,98 +449,98 @@ Next-day ES_0.99: 3.48% [3.26%, 3.83%]</code></pre>
 <p>This produces a sequence of out-of-sample VaR forecasts and corresponding violation indicators that can be evaluated with standard backtesting procedures (Kupiec, Christoffersen).</p>
 <p>A few design choices deserve comment. The rolling window of 1000 days (~4 trading years) balances estimation stability against responsiveness to changing market regimes. The threshold is set to the rolling 95% quantile rather than a fixed value, since the scale of the standardised residuals can drift slightly between windows. GPD parameters are estimated by MLE rather than MCMC: with several thousand re-fits, full Bayesian inference would be computationally prohibitive, and only the point estimate of <span class="math inline">\(\text{VaR}^z\)</span> is needed to determine whether a violation occurred. Iterations with fewer than 20 exceedances are flagged as missing and excluded from the evaluation. Computation is parallelised across cores using <code>multiprocessing.Pool</code>; the worker initialiser pattern is required on macOS where the spawn start method does not inherit module-level state.</p>
 <p>The rolling-window logic is implemented in <code>VaR_backtest_utils.py</code> (see repository); the cell below executes the backtest.</p>
-<div id="9d78d35b" class="cell" data-execution_count="11">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>window <span class="op">=</span> <span class="dv">1000</span></span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> Pool(</span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    <span class="dv">10</span>,</span>
-<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>    initializer<span class="op">=</span>init_worker,</span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    initargs<span class="op">=</span>(</span>
-<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>        returns_dec.values,</span>
-<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>        window,</span>
-<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>    ),</span>
-<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>) <span class="im">as</span> pool:</span>
-<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>    results <span class="op">=</span> pool.<span class="bu">map</span>(backtest_single, <span class="bu">range</span>(window, <span class="bu">len</span>(returns_dec)))</span>
-<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>var_estimates, es_estimates, violations <span class="op">=</span> <span class="bu">zip</span>(<span class="op">*</span>results)</span>
-<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>var_estimates <span class="op">=</span> np.array(var_estimates)</span>
-<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>es_estimates <span class="op">=</span> np.array(es_estimates)</span>
-<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>violations <span class="op">=</span> np.array(violations)</span>
-<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a>valid_var <span class="op">=</span> <span class="op">~</span>np.isnan(var_estimates)</span>
-<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a>violations_clean <span class="op">=</span> violations[valid_var]</span>
-<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a>var_clean <span class="op">=</span> var_estimates[valid_var]</span>
-<span id="cb16-20"><a href="#cb16-20" aria-hidden="true" tabindex="-1"></a>es_clean <span class="op">=</span> es_estimates[valid_var]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div id="363000b0" class="cell" data-execution_count="11">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>window <span class="op">=</span> <span class="dv">1000</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> Pool(</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    <span class="dv">10</span>,</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    initializer<span class="op">=</span>init_worker,</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    initargs<span class="op">=</span>(</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>        returns_dec.values,</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>        window,</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>) <span class="im">as</span> pool:</span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>    results <span class="op">=</span> pool.<span class="bu">map</span>(backtest_single, <span class="bu">range</span>(window, <span class="bu">len</span>(returns_dec)))</span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>var_estimates, es_estimates, violations <span class="op">=</span> <span class="bu">zip</span>(<span class="op">*</span>results)</span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>var_estimates <span class="op">=</span> np.array(var_estimates)</span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>es_estimates <span class="op">=</span> np.array(es_estimates)</span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>violations <span class="op">=</span> np.array(violations)</span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>valid_var <span class="op">=</span> <span class="op">~</span>np.isnan(var_estimates)</span>
+<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a>violations_clean <span class="op">=</span> violations[valid_var]</span>
+<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a>var_clean <span class="op">=</span> var_estimates[valid_var]</span>
+<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a>es_clean <span class="op">=</span> es_estimates[valid_var]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <section id="results" class="level4">
 <h4 class="anchored" data-anchor-id="results">Results</h4>
-<div id="43f706cb" class="cell" data-execution_count="12">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>n_obs <span class="op">=</span> <span class="bu">len</span>(violations_clean)</span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>n_viol <span class="op">=</span> violations_clean.<span class="bu">sum</span>()</span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Violations: </span><span class="sc">{</span>n_viol<span class="sc">}</span><span class="ss">/</span><span class="sc">{</span>n_obs<span class="sc">}</span><span class="ss"> (</span><span class="sc">{</span>n_viol <span class="op">/</span> n_obs<span class="sc">:.4f}</span><span class="ss">)"</span>)</span>
-<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Expected: </span><span class="sc">{</span>n_obs <span class="op">*</span> <span class="fl">0.01</span><span class="sc">:.0f}</span><span class="ss"> (</span><span class="sc">{</span><span class="fl">0.01</span><span class="sc">}</span><span class="ss">)"</span>)</span>
-<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a><span class="co"># --- Kupiec-Test ---</span></span>
-<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>p0 <span class="op">=</span> <span class="fl">0.01</span></span>
-<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>p_hat <span class="op">=</span> n_viol <span class="op">/</span> n_obs</span>
-<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>LR <span class="op">=</span> <span class="op">-</span><span class="dv">2</span> <span class="op">*</span> (</span>
-<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>    n_viol <span class="op">*</span> np.log(p0)</span>
-<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>    <span class="op">+</span> (n_obs <span class="op">-</span> n_viol) <span class="op">*</span> np.log(<span class="dv">1</span> <span class="op">-</span> p0)</span>
-<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>    <span class="op">-</span> n_viol <span class="op">*</span> np.log(p_hat)</span>
-<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a>    <span class="op">-</span> (n_obs <span class="op">-</span> n_viol) <span class="op">*</span> np.log(<span class="dv">1</span> <span class="op">-</span> p_hat)</span>
-<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a>p_value <span class="op">=</span> <span class="dv">1</span> <span class="op">-</span> chi2.cdf(LR, df<span class="op">=</span><span class="dv">1</span>)</span>
-<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Kupiec: LR=</span><span class="sc">{</span>LR<span class="sc">:.3f}</span><span class="ss">, p=</span><span class="sc">{</span>p_value<span class="sc">:.4f}</span><span class="ss">"</span>)</span>
-<span id="cb17-17"><a href="#cb17-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-18"><a href="#cb17-18" aria-hidden="true" tabindex="-1"></a>dates_test <span class="op">=</span> returns_dec.index[window:][valid_var]</span>
-<span id="cb17-19"><a href="#cb17-19" aria-hidden="true" tabindex="-1"></a>actual_losses <span class="op">=</span> <span class="op">-</span>returns_dec.values[window:][valid_var]</span>
-<span id="cb17-20"><a href="#cb17-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-21"><a href="#cb17-21" aria-hidden="true" tabindex="-1"></a><span class="co"># --- Christoffersen-Test ---</span></span>
-<span id="cb17-22"><a href="#cb17-22" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> christoffersen(violations, p0<span class="op">=</span><span class="fl">0.01</span>):</span>
-<span id="cb17-23"><a href="#cb17-23" aria-hidden="true" tabindex="-1"></a>    v <span class="op">=</span> np.asarray(violations).astype(<span class="bu">int</span>)</span>
-<span id="cb17-24"><a href="#cb17-24" aria-hidden="true" tabindex="-1"></a>    n00 <span class="op">=</span> ((v[:<span class="op">-</span><span class="dv">1</span>]<span class="op">==</span><span class="dv">0</span>)<span class="op">&amp;</span>(v[<span class="dv">1</span>:]<span class="op">==</span><span class="dv">0</span>)).<span class="bu">sum</span>()</span>
-<span id="cb17-25"><a href="#cb17-25" aria-hidden="true" tabindex="-1"></a>    n01 <span class="op">=</span> ((v[:<span class="op">-</span><span class="dv">1</span>]<span class="op">==</span><span class="dv">0</span>)<span class="op">&amp;</span>(v[<span class="dv">1</span>:]<span class="op">==</span><span class="dv">1</span>)).<span class="bu">sum</span>()</span>
-<span id="cb17-26"><a href="#cb17-26" aria-hidden="true" tabindex="-1"></a>    n10 <span class="op">=</span> ((v[:<span class="op">-</span><span class="dv">1</span>]<span class="op">==</span><span class="dv">1</span>)<span class="op">&amp;</span>(v[<span class="dv">1</span>:]<span class="op">==</span><span class="dv">0</span>)).<span class="bu">sum</span>()</span>
-<span id="cb17-27"><a href="#cb17-27" aria-hidden="true" tabindex="-1"></a>    n11 <span class="op">=</span> ((v[:<span class="op">-</span><span class="dv">1</span>]<span class="op">==</span><span class="dv">1</span>)<span class="op">&amp;</span>(v[<span class="dv">1</span>:]<span class="op">==</span><span class="dv">1</span>)).<span class="bu">sum</span>()</span>
-<span id="cb17-28"><a href="#cb17-28" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb17-29"><a href="#cb17-29" aria-hidden="true" tabindex="-1"></a>    pi01, pi11 <span class="op">=</span> n01<span class="op">/</span>(n00<span class="op">+</span>n01), n11<span class="op">/</span>(n10<span class="op">+</span>n11)</span>
-<span id="cb17-30"><a href="#cb17-30" aria-hidden="true" tabindex="-1"></a>    pi <span class="op">=</span> (n01<span class="op">+</span>n11)<span class="op">/</span>(n00<span class="op">+</span>n01<span class="op">+</span>n10<span class="op">+</span>n11)</span>
-<span id="cb17-31"><a href="#cb17-31" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb17-32"><a href="#cb17-32" aria-hidden="true" tabindex="-1"></a>    LR_ind <span class="op">=</span> <span class="op">-</span><span class="dv">2</span><span class="op">*</span>((n00<span class="op">+</span>n10)<span class="op">*</span>np.log(<span class="dv">1</span><span class="op">-</span>pi) <span class="op">+</span> (n01<span class="op">+</span>n11)<span class="op">*</span>np.log(pi)</span>
-<span id="cb17-33"><a href="#cb17-33" aria-hidden="true" tabindex="-1"></a>                 <span class="op">-</span> n00<span class="op">*</span>np.log(<span class="dv">1</span><span class="op">-</span>pi01) <span class="op">-</span> n01<span class="op">*</span>np.log(pi01)</span>
-<span id="cb17-34"><a href="#cb17-34" aria-hidden="true" tabindex="-1"></a>                 <span class="op">-</span> n10<span class="op">*</span>np.log(<span class="dv">1</span><span class="op">-</span>pi11) <span class="op">-</span> n11<span class="op">*</span>np.log(pi11))</span>
-<span id="cb17-35"><a href="#cb17-35" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb17-36"><a href="#cb17-36" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> LR_ind, <span class="dv">1</span> <span class="op">-</span> chi2.cdf(LR_ind, df<span class="op">=</span><span class="dv">1</span>)</span>
-<span id="cb17-37"><a href="#cb17-37" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-38"><a href="#cb17-38" aria-hidden="true" tabindex="-1"></a>LR_ind, p_ind <span class="op">=</span> christoffersen(violations_clean)</span>
-<span id="cb17-39"><a href="#cb17-39" aria-hidden="true" tabindex="-1"></a>LR_cc <span class="op">=</span> LR <span class="op">+</span> LR_ind  <span class="co"># LR = Kupiec von oben</span></span>
-<span id="cb17-40"><a href="#cb17-40" aria-hidden="true" tabindex="-1"></a>p_cc <span class="op">=</span> <span class="dv">1</span> <span class="op">-</span> chi2.cdf(LR_cc, df<span class="op">=</span><span class="dv">2</span>)</span>
-<span id="cb17-41"><a href="#cb17-41" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Christoffersen Ind: LR=</span><span class="sc">{</span>LR_ind<span class="sc">:.3f}</span><span class="ss">, p=</span><span class="sc">{</span>p_ind<span class="sc">:.4f}</span><span class="ss">"</span>)</span>
-<span id="cb17-42"><a href="#cb17-42" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Christoffersen CC:  LR=</span><span class="sc">{</span>LR_cc<span class="sc">:.3f}</span><span class="ss">, p=</span><span class="sc">{</span><span class="dv">1</span><span class="op">-</span>chi2<span class="sc">.</span>cdf(LR_cc, df<span class="op">=</span><span class="dv">2</span>)<span class="sc">:.4f}</span><span class="ss">"</span>)</span>
-<span id="cb17-43"><a href="#cb17-43" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-44"><a href="#cb17-44" aria-hidden="true" tabindex="-1"></a>plt.figure(figsize<span class="op">=</span>(<span class="dv">14</span>, <span class="dv">5</span>))</span>
-<span id="cb17-45"><a href="#cb17-45" aria-hidden="true" tabindex="-1"></a>plt.plot(dates_test, actual_losses, alpha<span class="op">=</span><span class="fl">0.4</span>, lw<span class="op">=</span><span class="fl">0.5</span>, color<span class="op">=</span><span class="st">"steelblue"</span>)</span>
-<span id="cb17-46"><a href="#cb17-46" aria-hidden="true" tabindex="-1"></a>plt.plot(dates_test, var_clean, color<span class="op">=</span><span class="st">"red"</span>, lw<span class="op">=</span><span class="fl">0.8</span>, label<span class="op">=</span><span class="st">"VaR 99%"</span>)</span>
-<span id="cb17-47"><a href="#cb17-47" aria-hidden="true" tabindex="-1"></a>plt.scatter(</span>
-<span id="cb17-48"><a href="#cb17-48" aria-hidden="true" tabindex="-1"></a>    dates_test[violations_clean],</span>
-<span id="cb17-49"><a href="#cb17-49" aria-hidden="true" tabindex="-1"></a>    actual_losses[violations_clean],</span>
-<span id="cb17-50"><a href="#cb17-50" aria-hidden="true" tabindex="-1"></a>    color<span class="op">=</span><span class="st">"darkred"</span>,</span>
-<span id="cb17-51"><a href="#cb17-51" aria-hidden="true" tabindex="-1"></a>    s<span class="op">=</span><span class="dv">10</span>,</span>
-<span id="cb17-52"><a href="#cb17-52" aria-hidden="true" tabindex="-1"></a>    zorder<span class="op">=</span><span class="dv">5</span>,</span>
-<span id="cb17-53"><a href="#cb17-53" aria-hidden="true" tabindex="-1"></a>    label<span class="op">=</span><span class="ss">f"Violations (</span><span class="sc">{</span>n_viol<span class="sc">}</span><span class="ss">)"</span>,</span>
-<span id="cb17-54"><a href="#cb17-54" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb17-55"><a href="#cb17-55" aria-hidden="true" tabindex="-1"></a>plt.legend()</span>
-<span id="cb17-56"><a href="#cb17-56" aria-hidden="true" tabindex="-1"></a>plt.title(<span class="st">"VaR Backtesting — GARCH + Rolling POT"</span>)</span>
-<span id="cb17-57"><a href="#cb17-57" aria-hidden="true" tabindex="-1"></a>plt.ylabel(<span class="st">"Loss (simple return)"</span>)</span>
-<span id="cb17-58"><a href="#cb17-58" aria-hidden="true" tabindex="-1"></a>plt.show()</span>
-<span id="cb17-59"><a href="#cb17-59" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-60"><a href="#cb17-60" aria-hidden="true" tabindex="-1"></a>start_year <span class="op">=</span> dates_test[<span class="dv">0</span>].year</span>
-<span id="cb17-61"><a href="#cb17-61" aria-hidden="true" tabindex="-1"></a>end_year <span class="op">=</span> dates_test[<span class="op">-</span><span class="dv">1</span>].year</span>
-<span id="cb17-62"><a href="#cb17-62" aria-hidden="true" tabindex="-1"></a>n_years_bt <span class="op">=</span> end_year <span class="op">-</span> start_year</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div id="cf835f89" class="cell" data-execution_count="12">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>n_obs <span class="op">=</span> <span class="bu">len</span>(violations_clean)</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>n_viol <span class="op">=</span> <span class="bu">int</span>(violations_clean.<span class="bu">sum</span>())</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Violations: </span><span class="sc">{</span>n_viol<span class="sc">}</span><span class="ss">/</span><span class="sc">{</span>n_obs<span class="sc">}</span><span class="ss"> (</span><span class="sc">{</span>n_viol <span class="op">/</span> n_obs<span class="sc">:.4f}</span><span class="ss">)"</span>)</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Expected: </span><span class="sc">{</span>n_obs <span class="op">*</span> <span class="fl">0.01</span><span class="sc">:.0f}</span><span class="ss"> (</span><span class="sc">{</span><span class="fl">0.01</span><span class="sc">}</span><span class="ss">)"</span>)</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="co"># --- Kupiec-Test ---</span></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>p0 <span class="op">=</span> <span class="fl">0.01</span></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>p_hat <span class="op">=</span> n_viol <span class="op">/</span> n_obs</span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>LR <span class="op">=</span> <span class="op">-</span><span class="dv">2</span> <span class="op">*</span> (</span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>    n_viol <span class="op">*</span> np.log(p0)</span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>    <span class="op">+</span> (n_obs <span class="op">-</span> n_viol) <span class="op">*</span> np.log(<span class="dv">1</span> <span class="op">-</span> p0)</span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>    <span class="op">-</span> n_viol <span class="op">*</span> np.log(p_hat)</span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>    <span class="op">-</span> (n_obs <span class="op">-</span> n_viol) <span class="op">*</span> np.log(<span class="dv">1</span> <span class="op">-</span> p_hat)</span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>p_value <span class="op">=</span> <span class="dv">1</span> <span class="op">-</span> chi2.cdf(LR, df<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Kupiec: LR=</span><span class="sc">{</span>LR<span class="sc">:.3f}</span><span class="ss">, p=</span><span class="sc">{</span>p_value<span class="sc">:.4f}</span><span class="ss">"</span>)</span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a>dates_test <span class="op">=</span> returns_dec.index[window:][valid_var]</span>
+<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a>actual_losses <span class="op">=</span> <span class="op">-</span>returns_dec.values[window:][valid_var]</span>
+<span id="cb16-20"><a href="#cb16-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-21"><a href="#cb16-21" aria-hidden="true" tabindex="-1"></a><span class="co"># --- Christoffersen-Test ---</span></span>
+<span id="cb16-22"><a href="#cb16-22" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> christoffersen(violations, p0<span class="op">=</span><span class="fl">0.01</span>):</span>
+<span id="cb16-23"><a href="#cb16-23" aria-hidden="true" tabindex="-1"></a>    v <span class="op">=</span> np.asarray(violations).astype(<span class="bu">int</span>)</span>
+<span id="cb16-24"><a href="#cb16-24" aria-hidden="true" tabindex="-1"></a>    n00 <span class="op">=</span> ((v[:<span class="op">-</span><span class="dv">1</span>]<span class="op">==</span><span class="dv">0</span>)<span class="op">&amp;</span>(v[<span class="dv">1</span>:]<span class="op">==</span><span class="dv">0</span>)).<span class="bu">sum</span>()</span>
+<span id="cb16-25"><a href="#cb16-25" aria-hidden="true" tabindex="-1"></a>    n01 <span class="op">=</span> ((v[:<span class="op">-</span><span class="dv">1</span>]<span class="op">==</span><span class="dv">0</span>)<span class="op">&amp;</span>(v[<span class="dv">1</span>:]<span class="op">==</span><span class="dv">1</span>)).<span class="bu">sum</span>()</span>
+<span id="cb16-26"><a href="#cb16-26" aria-hidden="true" tabindex="-1"></a>    n10 <span class="op">=</span> ((v[:<span class="op">-</span><span class="dv">1</span>]<span class="op">==</span><span class="dv">1</span>)<span class="op">&amp;</span>(v[<span class="dv">1</span>:]<span class="op">==</span><span class="dv">0</span>)).<span class="bu">sum</span>()</span>
+<span id="cb16-27"><a href="#cb16-27" aria-hidden="true" tabindex="-1"></a>    n11 <span class="op">=</span> ((v[:<span class="op">-</span><span class="dv">1</span>]<span class="op">==</span><span class="dv">1</span>)<span class="op">&amp;</span>(v[<span class="dv">1</span>:]<span class="op">==</span><span class="dv">1</span>)).<span class="bu">sum</span>()</span>
+<span id="cb16-28"><a href="#cb16-28" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb16-29"><a href="#cb16-29" aria-hidden="true" tabindex="-1"></a>    pi01, pi11 <span class="op">=</span> n01<span class="op">/</span>(n00<span class="op">+</span>n01), n11<span class="op">/</span>(n10<span class="op">+</span>n11)</span>
+<span id="cb16-30"><a href="#cb16-30" aria-hidden="true" tabindex="-1"></a>    pi <span class="op">=</span> (n01<span class="op">+</span>n11)<span class="op">/</span>(n00<span class="op">+</span>n01<span class="op">+</span>n10<span class="op">+</span>n11)</span>
+<span id="cb16-31"><a href="#cb16-31" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb16-32"><a href="#cb16-32" aria-hidden="true" tabindex="-1"></a>    LR_ind <span class="op">=</span> <span class="op">-</span><span class="dv">2</span><span class="op">*</span>((n00<span class="op">+</span>n10)<span class="op">*</span>np.log(<span class="dv">1</span><span class="op">-</span>pi) <span class="op">+</span> (n01<span class="op">+</span>n11)<span class="op">*</span>np.log(pi)</span>
+<span id="cb16-33"><a href="#cb16-33" aria-hidden="true" tabindex="-1"></a>                 <span class="op">-</span> n00<span class="op">*</span>np.log(<span class="dv">1</span><span class="op">-</span>pi01) <span class="op">-</span> n01<span class="op">*</span>np.log(pi01)</span>
+<span id="cb16-34"><a href="#cb16-34" aria-hidden="true" tabindex="-1"></a>                 <span class="op">-</span> n10<span class="op">*</span>np.log(<span class="dv">1</span><span class="op">-</span>pi11) <span class="op">-</span> n11<span class="op">*</span>np.log(pi11))</span>
+<span id="cb16-35"><a href="#cb16-35" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb16-36"><a href="#cb16-36" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> LR_ind, <span class="dv">1</span> <span class="op">-</span> chi2.cdf(LR_ind, df<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb16-37"><a href="#cb16-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-38"><a href="#cb16-38" aria-hidden="true" tabindex="-1"></a>LR_ind, p_ind <span class="op">=</span> christoffersen(violations_clean)</span>
+<span id="cb16-39"><a href="#cb16-39" aria-hidden="true" tabindex="-1"></a>LR_cc <span class="op">=</span> LR <span class="op">+</span> LR_ind  <span class="co"># LR = Kupiec von oben</span></span>
+<span id="cb16-40"><a href="#cb16-40" aria-hidden="true" tabindex="-1"></a>p_cc <span class="op">=</span> <span class="dv">1</span> <span class="op">-</span> chi2.cdf(LR_cc, df<span class="op">=</span><span class="dv">2</span>)</span>
+<span id="cb16-41"><a href="#cb16-41" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Christoffersen Ind: LR=</span><span class="sc">{</span>LR_ind<span class="sc">:.3f}</span><span class="ss">, p=</span><span class="sc">{</span>p_ind<span class="sc">:.4f}</span><span class="ss">"</span>)</span>
+<span id="cb16-42"><a href="#cb16-42" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Christoffersen CC:  LR=</span><span class="sc">{</span>LR_cc<span class="sc">:.3f}</span><span class="ss">, p=</span><span class="sc">{</span><span class="dv">1</span><span class="op">-</span>chi2<span class="sc">.</span>cdf(LR_cc, df<span class="op">=</span><span class="dv">2</span>)<span class="sc">:.4f}</span><span class="ss">"</span>)</span>
+<span id="cb16-43"><a href="#cb16-43" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-44"><a href="#cb16-44" aria-hidden="true" tabindex="-1"></a>plt.figure(figsize<span class="op">=</span>(<span class="dv">14</span>, <span class="dv">5</span>))</span>
+<span id="cb16-45"><a href="#cb16-45" aria-hidden="true" tabindex="-1"></a>plt.plot(dates_test, actual_losses, alpha<span class="op">=</span><span class="fl">0.4</span>, lw<span class="op">=</span><span class="fl">0.5</span>, color<span class="op">=</span><span class="st">"steelblue"</span>)</span>
+<span id="cb16-46"><a href="#cb16-46" aria-hidden="true" tabindex="-1"></a>plt.plot(dates_test, var_clean, color<span class="op">=</span><span class="st">"red"</span>, lw<span class="op">=</span><span class="fl">0.8</span>, label<span class="op">=</span><span class="st">"VaR 99%"</span>)</span>
+<span id="cb16-47"><a href="#cb16-47" aria-hidden="true" tabindex="-1"></a>plt.scatter(</span>
+<span id="cb16-48"><a href="#cb16-48" aria-hidden="true" tabindex="-1"></a>    dates_test[violations_clean],</span>
+<span id="cb16-49"><a href="#cb16-49" aria-hidden="true" tabindex="-1"></a>    actual_losses[violations_clean],</span>
+<span id="cb16-50"><a href="#cb16-50" aria-hidden="true" tabindex="-1"></a>    color<span class="op">=</span><span class="st">"darkred"</span>,</span>
+<span id="cb16-51"><a href="#cb16-51" aria-hidden="true" tabindex="-1"></a>    s<span class="op">=</span><span class="dv">10</span>,</span>
+<span id="cb16-52"><a href="#cb16-52" aria-hidden="true" tabindex="-1"></a>    zorder<span class="op">=</span><span class="dv">5</span>,</span>
+<span id="cb16-53"><a href="#cb16-53" aria-hidden="true" tabindex="-1"></a>    label<span class="op">=</span><span class="ss">f"Violations (</span><span class="sc">{</span>n_viol<span class="sc">}</span><span class="ss">)"</span>,</span>
+<span id="cb16-54"><a href="#cb16-54" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb16-55"><a href="#cb16-55" aria-hidden="true" tabindex="-1"></a>plt.legend()</span>
+<span id="cb16-56"><a href="#cb16-56" aria-hidden="true" tabindex="-1"></a>plt.title(<span class="st">"VaR Backtesting — GARCH + Rolling POT"</span>)</span>
+<span id="cb16-57"><a href="#cb16-57" aria-hidden="true" tabindex="-1"></a>plt.ylabel(<span class="st">"Loss (simple return)"</span>)</span>
+<span id="cb16-58"><a href="#cb16-58" aria-hidden="true" tabindex="-1"></a>plt.show()</span>
+<span id="cb16-59"><a href="#cb16-59" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-60"><a href="#cb16-60" aria-hidden="true" tabindex="-1"></a>start_year <span class="op">=</span> dates_test[<span class="dv">0</span>].year</span>
+<span id="cb16-61"><a href="#cb16-61" aria-hidden="true" tabindex="-1"></a>end_year <span class="op">=</span> dates_test[<span class="op">-</span><span class="dv">1</span>].year</span>
+<span id="cb16-62"><a href="#cb16-62" aria-hidden="true" tabindex="-1"></a>n_years_bt <span class="op">=</span> end_year <span class="op">-</span> start_year</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>Violations: 111/10703 (0.0104)
+<pre><code>Violations: 111/10702 (0.0104)
 Expected: 107 (0.01)
-Kupiec: LR=0.147, p=0.7015
-Christoffersen Ind: LR=4.416, p=0.0356
+Kupiec: LR=0.148, p=0.7007
+Christoffersen Ind: LR=4.415, p=0.0356
 Christoffersen CC:  LR=4.563, p=0.1021</code></pre>
 </div>
 <div class="cell-output cell-output-display">
@@ -532,7 +554,7 @@ Christoffersen CC:  LR=4.563, p=0.1021</code></pre>
 </section>
 <section id="discussion" class="level4">
 <h4 class="anchored" data-anchor-id="discussion">Discussion</h4>
-<p>The backtest covers 10,703 out-of-sample days from 1983 to 2026, with np.int64(111) recorded violations of the 99% <span class="math inline">\(\text{VaR}\)</span>.</p>
+<p>The backtest covers 10,702 out-of-sample days from 1983 to 2026, with 111 recorded violations of the 99% <span class="math inline">\(\text{VaR}\)</span>.</p>
 <p><strong>Unconditional coverage.</strong> With an empirical violation rate of 1.04% against a nominal 1%, the Kupiec test does not reject the null of correct unconditional coverage (<span class="math inline">\(LR =\)</span> 0.15, <span class="math inline">\(p =\)</span> 0.70). The conditional EVT model produces almost exactly the right number of tail violations over four decades, including periods as different as the 1987 crash, the dot-com era, the global financial crisis, the eurozone crisis, and the COVID-19 shock.</p>
 <p><strong>Independence.</strong> The Christoffersen independence test rejects the null at the 5% level (<span class="math inline">\(LR =\)</span> 4.42, <span class="math inline">\(p =\)</span> 0.036). Visual inspection of the violation series confirms this: violations cluster around major crisis periods, particularly 1987, 1998 (LTCM/Asian crisis), 2007–2009, and March 2020. Although GARCH(1,1) substantially reduces volatility-induced clustering relative to a static model, residual dependence remains — likely because GARCH(1,1) does not capture the leverage effect, assumes Gaussian innovations even though the standardised residuals are clearly heavy-tailed, and uses a rather simple lag structure.</p>
 <p><strong>Conditional coverage.</strong> The combined test does not reject at the 5% level (<span class="math inline">\(LR =\)</span> 4.56, <span class="math inline">\(p =\)</span> 0.10). Overall, the model captures the right number of tail events but with slightly clustered timing.</p>
@@ -541,17 +563,17 @@ Christoffersen CC:  LR=4.563, p=0.1021</code></pre>
 </section>
 <section id="es-backtest" class="level3">
 <h3 class="anchored" data-anchor-id="es-backtest">ES Backtest</h3>
-<p>Since backtesting is conducted at the 99% level, only np.int64(111) violation days are available for <span class="math inline">\(\text{ES}\)</span> evaluation. I test whether the exceedance residuals <span class="math inline">\(K_{t+1} = (L_{t+1} - \widehat{ES}_t^\alpha) / \widehat{ES}_t^\alpha\)</span> have mean zero using a one-sample t-test</p>
-<div id="d906ee19" class="cell" data-execution_count="13">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>exceedance_residuals <span class="op">=</span> (</span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>    actual_losses[violations_clean] <span class="op">-</span> es_clean[violations_clean]</span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>) <span class="op">/</span> es_clean[violations_clean]</span>
-<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>stat, p_val <span class="op">=</span> ttest_1samp(exceedance_residuals, popmean<span class="op">=</span><span class="dv">0</span>)</span>
-<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(stat)</span>
-<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(p_val)</span>
-<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>es_empirical <span class="op">=</span> actual_losses[violations_clean].mean()</span>
-<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>es_estimated <span class="op">=</span> es_clean[violations_clean].mean()</span>
-<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>difference <span class="op">=</span> (es_empirical<span class="op">-</span>es_estimated)<span class="op">*</span><span class="dv">100</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Since backtesting is conducted at the 99% level, only 111 violation days are available for <span class="math inline">\(\text{ES}\)</span> evaluation. I test whether the exceedance residuals <span class="math inline">\(K_{t+1} = (L_{t+1} - \widehat{ES}_t^\alpha) / \widehat{ES}_t^\alpha\)</span> have mean zero using a one-sample t-test</p>
+<div id="42ad1835" class="cell" data-execution_count="13">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>exceedance_residuals <span class="op">=</span> (</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>    actual_losses[violations_clean] <span class="op">-</span> es_clean[violations_clean]</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>) <span class="op">/</span> es_clean[violations_clean]</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>stat, p_val <span class="op">=</span> ttest_1samp(exceedance_residuals, popmean<span class="op">=</span><span class="dv">0</span>)</span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(stat)</span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(p_val)</span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>es_empirical <span class="op">=</span> actual_losses[violations_clean].mean()</span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>es_estimated <span class="op">=</span> es_clean[violations_clean].mean()</span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>difference <span class="op">=</span> (es_empirical<span class="op">-</span>es_estimated)<span class="op">*</span><span class="dv">100</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>1.7955848772534468
 0.07530610616213479</code></pre>
@@ -561,114 +583,114 @@ Christoffersen CC:  LR=4.563, p=0.1021</code></pre>
 </section>
 <section id="day-forecast" class="level3">
 <h3 class="anchored" data-anchor-id="day-forecast">10-Day Forecast</h3>
-<p>Standard scaling (<code>VaR_z · σ_h</code>) implicitly assumes that the <em>h</em>-day standardised return has the same distribution as the 1-day innovation. Under iid-like residuals this is fine for the daily VaR path (each horizon is still a 1-day quantile, only σh_h σh​ changes), but not for the cumulative 10-day loss: a sum of hh h heavy-tailed variables drifts toward a thinner-tailed limit (CLT), so cumulative scaling overstates the true tail. To handle this consistently I simulate forward paths using HS-GARCH-EVT approach (McNeil &amp; Frey, 2000): the GARCH(1,1) recursion is propagated with innovations drawn from the empirical residual distribution below the threshold and from the fitted GPD above it. This gives both the daily VaR/ES path and the proper 10-day aggregate distribution, and lets me read off the comparison to naive scaling directly. For comparison, the naive square-root-of-time scaling rule is included. As expected, it systematically overstates both VaR and ES.</p>
-<div id="2f3a2ca2" class="cell" data-execution_count="14">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> simulate_garch_evt(</span>
-<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>    garch_result, std_resid, threshold, xi, sigma_gpd,</span>
-<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>    horizon<span class="op">=</span><span class="dv">10</span>, n_sims<span class="op">=</span><span class="dv">20_000</span>, seed<span class="op">=</span><span class="dv">42</span>,</span>
-<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>):</span>
-<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
-<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a><span class="co">    Filtered Historical Simulation with EVT lower tail.</span></span>
-<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a><span class="co">    Innovations: bootstrap z from {z &gt;= -u} (body), draw -(u+GPD) for loss tail.</span></span>
-<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a><span class="co">    Returns simulated simple % returns, shape (n_sims, horizon).</span></span>
-<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
-<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>    rng <span class="op">=</span> np.random.default_rng(seed)</span>
-<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>    p <span class="op">=</span> garch_result.params</span>
-<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a>    mu, omega <span class="op">=</span> p[<span class="st">"mu"</span>], p[<span class="st">"omega"</span>]</span>
-<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a>    a1, b1   <span class="op">=</span> p[<span class="st">"alpha[1]"</span>], p[<span class="st">"beta[1]"</span>]</span>
-<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a>    sigma2_t <span class="op">=</span> <span class="bu">float</span>(garch_result.conditional_volatility.iloc[<span class="op">-</span><span class="dv">1</span>]) <span class="op">**</span> <span class="dv">2</span></span>
-<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a>    eps_t    <span class="op">=</span> <span class="bu">float</span>(garch_result.resid.iloc[<span class="op">-</span><span class="dv">1</span>])</span>
-<span id="cb21-18"><a href="#cb21-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-19"><a href="#cb21-19" aria-hidden="true" tabindex="-1"></a>    z_full <span class="op">=</span> std_resid.dropna().to_numpy()</span>
-<span id="cb21-20"><a href="#cb21-20" aria-hidden="true" tabindex="-1"></a>    z_body <span class="op">=</span> z_full[z_full <span class="op">&gt;=</span> <span class="op">-</span>threshold]</span>
-<span id="cb21-21"><a href="#cb21-21" aria-hidden="true" tabindex="-1"></a>    p_tail <span class="op">=</span> <span class="bu">float</span>((z_full <span class="op">&lt;</span> <span class="op">-</span>threshold).mean())</span>
-<span id="cb21-22"><a href="#cb21-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-23"><a href="#cb21-23" aria-hidden="true" tabindex="-1"></a>    u_unif  <span class="op">=</span> rng.uniform(size<span class="op">=</span>(n_sims, horizon))</span>
-<span id="cb21-24"><a href="#cb21-24" aria-hidden="true" tabindex="-1"></a>    is_tail <span class="op">=</span> u_unif <span class="op">&lt;</span> p_tail</span>
-<span id="cb21-25"><a href="#cb21-25" aria-hidden="true" tabindex="-1"></a>    z <span class="op">=</span> np.empty((n_sims, horizon))</span>
-<span id="cb21-26"><a href="#cb21-26" aria-hidden="true" tabindex="-1"></a>    z[<span class="op">~</span>is_tail] <span class="op">=</span> rng.choice(z_body, size<span class="op">=</span>(<span class="op">~</span>is_tail).<span class="bu">sum</span>(), replace<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb21-27"><a href="#cb21-27" aria-hidden="true" tabindex="-1"></a>    excess      <span class="op">=</span> genpareto.rvs(xi, scale<span class="op">=</span>sigma_gpd,</span>
-<span id="cb21-28"><a href="#cb21-28" aria-hidden="true" tabindex="-1"></a>                                size<span class="op">=</span>is_tail.<span class="bu">sum</span>(), random_state<span class="op">=</span>rng)</span>
-<span id="cb21-29"><a href="#cb21-29" aria-hidden="true" tabindex="-1"></a>    z[is_tail]  <span class="op">=</span> <span class="op">-</span>(threshold <span class="op">+</span> excess)</span>
-<span id="cb21-30"><a href="#cb21-30" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-31"><a href="#cb21-31" aria-hidden="true" tabindex="-1"></a>    sim <span class="op">=</span> np.empty((n_sims, horizon))</span>
-<span id="cb21-32"><a href="#cb21-32" aria-hidden="true" tabindex="-1"></a>    s2  <span class="op">=</span> np.full(n_sims, sigma2_t)</span>
-<span id="cb21-33"><a href="#cb21-33" aria-hidden="true" tabindex="-1"></a>    e   <span class="op">=</span> np.full(n_sims, eps_t)</span>
-<span id="cb21-34"><a href="#cb21-34" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> h <span class="kw">in</span> <span class="bu">range</span>(horizon):</span>
-<span id="cb21-35"><a href="#cb21-35" aria-hidden="true" tabindex="-1"></a>        s2 <span class="op">=</span> omega <span class="op">+</span> a1 <span class="op">*</span> e<span class="op">**</span><span class="dv">2</span> <span class="op">+</span> b1 <span class="op">*</span> s2</span>
-<span id="cb21-36"><a href="#cb21-36" aria-hidden="true" tabindex="-1"></a>        e  <span class="op">=</span> np.sqrt(s2) <span class="op">*</span> z[:, h]</span>
-<span id="cb21-37"><a href="#cb21-37" aria-hidden="true" tabindex="-1"></a>        sim[:, h] <span class="op">=</span> mu <span class="op">+</span> e</span>
-<span id="cb21-38"><a href="#cb21-38" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> sim</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Standard scaling (<code>VaR_z · σ_h</code>) implicitly assumes that the <em>h</em>-day standardised return has the same distribution as the 1-day innovation. Under iid-like residuals this is fine for the daily VaR path (each horizon is still a 1-day quantile, only <span class="math inline">\(\sigma_h\)</span> changes), but not for the cumulative 10-day loss: a sum of <span class="math inline">\(h\)</span> heavy-tailed variables drifts toward a thinner-tailed limit (CLT), so cumulative scaling overstates the true tail. To handle this consistently I simulate forward paths using the HS-GARCH-EVT approach (McNeil &amp; Frey, 2000): the GARCH(1,1) recursion is propagated with innovations drawn from the empirical residual distribution below the threshold and from the fitted GPD above it. This gives both the daily VaR/ES path and the proper 10-day aggregate distribution, and lets me read off the comparison to naive scaling directly. For comparison, the naive square-root-of-time scaling rule is included. As expected, it systematically overstates both VaR and ES.</p>
+<div id="8f6aac37" class="cell" data-execution_count="14">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> simulate_garch_evt(</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>    garch_result, std_resid, threshold, xi, sigma_gpd,</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>    horizon<span class="op">=</span><span class="dv">10</span>, n_sims<span class="op">=</span><span class="dv">20_000</span>, seed<span class="op">=</span><span class="dv">42</span>,</span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>):</span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a><span class="co">    Filtered Historical Simulation with EVT lower tail.</span></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a><span class="co">    Innovations: bootstrap z from {z &gt;= -u} (body), draw -(u+GPD) for loss tail.</span></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a><span class="co">    Returns simulated simple % returns, shape (n_sims, horizon).</span></span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>    rng <span class="op">=</span> np.random.default_rng(seed)</span>
+<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a>    p <span class="op">=</span> garch_result.params</span>
+<span id="cb20-13"><a href="#cb20-13" aria-hidden="true" tabindex="-1"></a>    mu, omega <span class="op">=</span> p[<span class="st">"mu"</span>], p[<span class="st">"omega"</span>]</span>
+<span id="cb20-14"><a href="#cb20-14" aria-hidden="true" tabindex="-1"></a>    a1, b1   <span class="op">=</span> p[<span class="st">"alpha[1]"</span>], p[<span class="st">"beta[1]"</span>]</span>
+<span id="cb20-15"><a href="#cb20-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-16"><a href="#cb20-16" aria-hidden="true" tabindex="-1"></a>    sigma2_t <span class="op">=</span> <span class="bu">float</span>(garch_result.conditional_volatility.iloc[<span class="op">-</span><span class="dv">1</span>]) <span class="op">**</span> <span class="dv">2</span></span>
+<span id="cb20-17"><a href="#cb20-17" aria-hidden="true" tabindex="-1"></a>    eps_t    <span class="op">=</span> <span class="bu">float</span>(garch_result.resid.iloc[<span class="op">-</span><span class="dv">1</span>])</span>
+<span id="cb20-18"><a href="#cb20-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-19"><a href="#cb20-19" aria-hidden="true" tabindex="-1"></a>    z_full <span class="op">=</span> std_resid.dropna().to_numpy()</span>
+<span id="cb20-20"><a href="#cb20-20" aria-hidden="true" tabindex="-1"></a>    z_body <span class="op">=</span> z_full[z_full <span class="op">&gt;=</span> <span class="op">-</span>threshold]</span>
+<span id="cb20-21"><a href="#cb20-21" aria-hidden="true" tabindex="-1"></a>    p_tail <span class="op">=</span> <span class="bu">float</span>((z_full <span class="op">&lt;</span> <span class="op">-</span>threshold).mean())</span>
+<span id="cb20-22"><a href="#cb20-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-23"><a href="#cb20-23" aria-hidden="true" tabindex="-1"></a>    u_unif  <span class="op">=</span> rng.uniform(size<span class="op">=</span>(n_sims, horizon))</span>
+<span id="cb20-24"><a href="#cb20-24" aria-hidden="true" tabindex="-1"></a>    is_tail <span class="op">=</span> u_unif <span class="op">&lt;</span> p_tail</span>
+<span id="cb20-25"><a href="#cb20-25" aria-hidden="true" tabindex="-1"></a>    z <span class="op">=</span> np.empty((n_sims, horizon))</span>
+<span id="cb20-26"><a href="#cb20-26" aria-hidden="true" tabindex="-1"></a>    z[<span class="op">~</span>is_tail] <span class="op">=</span> rng.choice(z_body, size<span class="op">=</span>(<span class="op">~</span>is_tail).<span class="bu">sum</span>(), replace<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb20-27"><a href="#cb20-27" aria-hidden="true" tabindex="-1"></a>    excess      <span class="op">=</span> genpareto.rvs(xi, scale<span class="op">=</span>sigma_gpd,</span>
+<span id="cb20-28"><a href="#cb20-28" aria-hidden="true" tabindex="-1"></a>                                size<span class="op">=</span>is_tail.<span class="bu">sum</span>(), random_state<span class="op">=</span>rng)</span>
+<span id="cb20-29"><a href="#cb20-29" aria-hidden="true" tabindex="-1"></a>    z[is_tail]  <span class="op">=</span> <span class="op">-</span>(threshold <span class="op">+</span> excess)</span>
+<span id="cb20-30"><a href="#cb20-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-31"><a href="#cb20-31" aria-hidden="true" tabindex="-1"></a>    sim <span class="op">=</span> np.empty((n_sims, horizon))</span>
+<span id="cb20-32"><a href="#cb20-32" aria-hidden="true" tabindex="-1"></a>    s2  <span class="op">=</span> np.full(n_sims, sigma2_t)</span>
+<span id="cb20-33"><a href="#cb20-33" aria-hidden="true" tabindex="-1"></a>    e   <span class="op">=</span> np.full(n_sims, eps_t)</span>
+<span id="cb20-34"><a href="#cb20-34" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> h <span class="kw">in</span> <span class="bu">range</span>(horizon):</span>
+<span id="cb20-35"><a href="#cb20-35" aria-hidden="true" tabindex="-1"></a>        s2 <span class="op">=</span> omega <span class="op">+</span> a1 <span class="op">*</span> e<span class="op">**</span><span class="dv">2</span> <span class="op">+</span> b1 <span class="op">*</span> s2</span>
+<span id="cb20-36"><a href="#cb20-36" aria-hidden="true" tabindex="-1"></a>        e  <span class="op">=</span> np.sqrt(s2) <span class="op">*</span> z[:, h]</span>
+<span id="cb20-37"><a href="#cb20-37" aria-hidden="true" tabindex="-1"></a>        sim[:, h] <span class="op">=</span> mu <span class="op">+</span> e</span>
+<span id="cb20-38"><a href="#cb20-38" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> sim</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div id="mc-vs-scaling" class="cell" data-execution_count="15">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- MC: posterior-median point estimate ---</span></span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>xi_med, beta_med <span class="op">=</span> np.median(xi), np.median(beta)</span>
-<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>varz_med, esz_med <span class="op">=</span> np.median(VaR_z), np.median(ES_z)</span>
-<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>sim <span class="op">=</span> simulate_garch_evt(result, std_resid, threshold<span class="op">=</span>u,</span>
-<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>                         xi<span class="op">=</span>xi_med, sigma_gpd<span class="op">=</span>beta_med,</span>
-<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>                         horizon<span class="op">=</span><span class="dv">10</span>, n_sims<span class="op">=</span><span class="dv">20_000</span>)</span>
-<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>daily_loss   <span class="op">=</span> <span class="op">-</span>sim                              <span class="co"># simple % loss per day</span></span>
-<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>var_path_mc  <span class="op">=</span> np.quantile(daily_loss, alpha, axis<span class="op">=</span><span class="dv">0</span>)</span>
-<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>es_path_mc   <span class="op">=</span> np.array([</span>
-<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a>    daily_loss[daily_loss[:, h] <span class="op">&gt;=</span> var_path_mc[h], h].mean()</span>
-<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> h <span class="kw">in</span> <span class="bu">range</span>(sim.shape[<span class="dv">1</span>])</span>
-<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a>])</span>
-<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a>cum_loss     <span class="op">=</span> (<span class="fl">1.0</span> <span class="op">-</span> np.prod(<span class="fl">1.0</span> <span class="op">+</span> sim <span class="op">/</span> <span class="fl">100.0</span>, axis<span class="op">=</span><span class="dv">1</span>)) <span class="op">*</span> <span class="fl">100.0</span></span>
-<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a>var_cum_mc   <span class="op">=</span> np.quantile(cum_loss, alpha)</span>
-<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a>es_cum_mc    <span class="op">=</span> cum_loss[cum_loss <span class="op">&gt;=</span> var_cum_mc].mean()</span>
-<span id="cb22-18"><a href="#cb22-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-19"><a href="#cb22-19" aria-hidden="true" tabindex="-1"></a><span class="co"># --- Naive scaling for comparison ---</span></span>
-<span id="cb22-20"><a href="#cb22-20" aria-hidden="true" tabindex="-1"></a>fc        <span class="op">=</span> result.forecast(horizon<span class="op">=</span><span class="dv">10</span>, reindex<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb22-21"><a href="#cb22-21" aria-hidden="true" tabindex="-1"></a>sigma_fc  <span class="op">=</span> np.sqrt(fc.variance.values[<span class="op">-</span><span class="dv">1</span>, :])   <span class="co"># daily σ_h, in %</span></span>
-<span id="cb22-22"><a href="#cb22-22" aria-hidden="true" tabindex="-1"></a>sigma_10d <span class="op">=</span> np.sqrt(np.<span class="bu">sum</span>(sigma_fc <span class="op">**</span> <span class="dv">2</span>))</span>
-<span id="cb22-23"><a href="#cb22-23" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-24"><a href="#cb22-24" aria-hidden="true" tabindex="-1"></a>var_path_scaled <span class="op">=</span> varz_med <span class="op">*</span> sigma_fc</span>
-<span id="cb22-25"><a href="#cb22-25" aria-hidden="true" tabindex="-1"></a>es_path_scaled  <span class="op">=</span> esz_med  <span class="op">*</span> sigma_fc</span>
-<span id="cb22-26"><a href="#cb22-26" aria-hidden="true" tabindex="-1"></a>var_cum_scaled  <span class="op">=</span> varz_med <span class="op">*</span> sigma_10d</span>
-<span id="cb22-27"><a href="#cb22-27" aria-hidden="true" tabindex="-1"></a>es_cum_scaled   <span class="op">=</span> esz_med  <span class="op">*</span> sigma_10d</span>
-<span id="cb22-28"><a href="#cb22-28" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-29"><a href="#cb22-29" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"10-day VaR</span><span class="sc">{</span>alpha<span class="sc">:.0%}</span><span class="ss">  | MC: </span><span class="sc">{</span>var_cum_mc<span class="sc">:5.2f}</span><span class="ss">%   scaling: </span><span class="sc">{</span>var_cum_scaled<span class="sc">:5.2f}</span><span class="ss">%"</span>)</span>
-<span id="cb22-30"><a href="#cb22-30" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"10-day ES</span><span class="sc">{</span>alpha<span class="sc">:.0%}</span><span class="ss">   | MC: </span><span class="sc">{</span>es_cum_mc<span class="sc">:5.2f}</span><span class="ss">%   scaling: </span><span class="sc">{</span>es_cum_scaled<span class="sc">:5.2f}</span><span class="ss">%"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- MC: posterior-median point estimate ---</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>xi_med, beta_med <span class="op">=</span> np.median(xi), np.median(beta)</span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>varz_med, esz_med <span class="op">=</span> np.median(VaR_z), np.median(ES_z)</span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>sim <span class="op">=</span> simulate_garch_evt(result, std_resid, threshold<span class="op">=</span>u,</span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>                         xi<span class="op">=</span>xi_med, sigma_gpd<span class="op">=</span>beta_med,</span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>                         horizon<span class="op">=</span><span class="dv">10</span>, n_sims<span class="op">=</span><span class="dv">20_000</span>)</span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>daily_loss   <span class="op">=</span> <span class="op">-</span>sim                              <span class="co"># simple % loss per day</span></span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>var_path_mc  <span class="op">=</span> np.quantile(daily_loss, alpha, axis<span class="op">=</span><span class="dv">0</span>)</span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>es_path_mc   <span class="op">=</span> np.array([</span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>    daily_loss[daily_loss[:, h] <span class="op">&gt;=</span> var_path_mc[h], h].mean()</span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> h <span class="kw">in</span> <span class="bu">range</span>(sim.shape[<span class="dv">1</span>])</span>
+<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a>])</span>
+<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a>cum_loss     <span class="op">=</span> (<span class="fl">1.0</span> <span class="op">-</span> np.prod(<span class="fl">1.0</span> <span class="op">+</span> sim <span class="op">/</span> <span class="fl">100.0</span>, axis<span class="op">=</span><span class="dv">1</span>)) <span class="op">*</span> <span class="fl">100.0</span></span>
+<span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a>var_cum_mc   <span class="op">=</span> np.quantile(cum_loss, alpha)</span>
+<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a>es_cum_mc    <span class="op">=</span> cum_loss[cum_loss <span class="op">&gt;=</span> var_cum_mc].mean()</span>
+<span id="cb21-18"><a href="#cb21-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-19"><a href="#cb21-19" aria-hidden="true" tabindex="-1"></a><span class="co"># --- Naive scaling for comparison ---</span></span>
+<span id="cb21-20"><a href="#cb21-20" aria-hidden="true" tabindex="-1"></a>fc        <span class="op">=</span> result.forecast(horizon<span class="op">=</span><span class="dv">10</span>, reindex<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb21-21"><a href="#cb21-21" aria-hidden="true" tabindex="-1"></a>sigma_fc  <span class="op">=</span> np.sqrt(fc.variance.values[<span class="op">-</span><span class="dv">1</span>, :])   <span class="co"># daily sigma_h, in %</span></span>
+<span id="cb21-22"><a href="#cb21-22" aria-hidden="true" tabindex="-1"></a>sigma_10d <span class="op">=</span> np.sqrt(np.<span class="bu">sum</span>(sigma_fc <span class="op">**</span> <span class="dv">2</span>))</span>
+<span id="cb21-23"><a href="#cb21-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-24"><a href="#cb21-24" aria-hidden="true" tabindex="-1"></a>var_path_scaled <span class="op">=</span> varz_med <span class="op">*</span> sigma_fc</span>
+<span id="cb21-25"><a href="#cb21-25" aria-hidden="true" tabindex="-1"></a>es_path_scaled  <span class="op">=</span> esz_med  <span class="op">*</span> sigma_fc</span>
+<span id="cb21-26"><a href="#cb21-26" aria-hidden="true" tabindex="-1"></a>var_cum_scaled  <span class="op">=</span> varz_med <span class="op">*</span> sigma_10d</span>
+<span id="cb21-27"><a href="#cb21-27" aria-hidden="true" tabindex="-1"></a>es_cum_scaled   <span class="op">=</span> esz_med  <span class="op">*</span> sigma_10d</span>
+<span id="cb21-28"><a href="#cb21-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-29"><a href="#cb21-29" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"10-day VaR</span><span class="sc">{</span>alpha<span class="sc">:.0%}</span><span class="ss">  | MC: </span><span class="sc">{</span>var_cum_mc<span class="sc">:5.2f}</span><span class="ss">%   scaling: </span><span class="sc">{</span>var_cum_scaled<span class="sc">:5.2f}</span><span class="ss">%"</span>)</span>
+<span id="cb21-30"><a href="#cb21-30" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"10-day ES</span><span class="sc">{</span>alpha<span class="sc">:.0%}</span><span class="ss">   | MC: </span><span class="sc">{</span>es_cum_mc<span class="sc">:5.2f}</span><span class="ss">%   scaling: </span><span class="sc">{</span>es_cum_scaled<span class="sc">:5.2f}</span><span class="ss">%"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>10-day VaR99%  | MC:  7.78%   scaling:  8.31%
-10-day ES99%   | MC:  9.97%   scaling: 11.11%</code></pre>
+<pre><code>10-day VaR99%  | MC:  8.04%   scaling:  8.70%
+10-day ES99%   | MC: 10.50%   scaling: 11.64%</code></pre>
 </div>
 </div>
 <div id="cell-mc-plot" class="cell" data-execution_count="16">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>h_axis <span class="op">=</span> np.arange(<span class="dv">1</span>, <span class="dv">11</span>)</span>
-<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(<span class="dv">1</span>, <span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">14</span>, <span class="dv">5</span>))</span>
-<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a><span class="co"># (a) Daily path</span></span>
-<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>ax <span class="op">=</span> axes[<span class="dv">0</span>]</span>
-<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>ax.plot(h_axis, var_path_mc,     <span class="st">"o-"</span>, color<span class="op">=</span><span class="st">"red"</span>,      label<span class="op">=</span><span class="st">"VaR — MC"</span>)</span>
-<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>ax.plot(h_axis, var_path_scaled, <span class="st">"s--"</span>, color<span class="op">=</span><span class="st">"red"</span>,     alpha<span class="op">=</span><span class="fl">0.6</span>, label<span class="op">=</span><span class="st">"VaR — scaling"</span>)</span>
-<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a>ax.plot(h_axis, es_path_mc,      <span class="st">"o-"</span>,  color<span class="op">=</span><span class="st">"darkred"</span>, label<span class="op">=</span><span class="st">"ES — MC"</span>)</span>
-<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a>ax.plot(h_axis, es_path_scaled,  <span class="st">"s--"</span>, color<span class="op">=</span><span class="st">"darkred"</span>, alpha<span class="op">=</span><span class="fl">0.6</span>, label<span class="op">=</span><span class="st">"ES — scaling"</span>)</span>
-<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Horizon (trading days)"</span>)</span>
-<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="ss">f"</span><span class="sc">{</span>alpha<span class="sc">:.0%}</span><span class="ss"> risk measure (% loss)"</span>)</span>
-<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">"Daily VaR / ES path"</span>)</span>
-<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a>ax.legend()</span>
-<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-15"><a href="#cb24-15" aria-hidden="true" tabindex="-1"></a><span class="co"># (b) Cumulative distribution</span></span>
-<span id="cb24-16"><a href="#cb24-16" aria-hidden="true" tabindex="-1"></a>ax <span class="op">=</span> axes[<span class="dv">1</span>]</span>
-<span id="cb24-17"><a href="#cb24-17" aria-hidden="true" tabindex="-1"></a>sns.histplot(cum_loss, bins<span class="op">=</span><span class="dv">80</span>, stat<span class="op">=</span><span class="st">"density"</span>, alpha<span class="op">=</span><span class="fl">0.5</span>,</span>
-<span id="cb24-18"><a href="#cb24-18" aria-hidden="true" tabindex="-1"></a>             color<span class="op">=</span><span class="st">"steelblue"</span>, edgecolor<span class="op">=</span><span class="st">"none"</span>, ax<span class="op">=</span>ax)</span>
-<span id="cb24-19"><a href="#cb24-19" aria-hidden="true" tabindex="-1"></a>ax.axvline(var_cum_mc,     color<span class="op">=</span><span class="st">"red"</span>,      lw<span class="op">=</span><span class="dv">2</span>,             label<span class="op">=</span><span class="ss">f"VaR (MC) </span><span class="sc">{</span>var_cum_mc<span class="sc">:.2f}</span><span class="ss">%"</span>)</span>
-<span id="cb24-20"><a href="#cb24-20" aria-hidden="true" tabindex="-1"></a>ax.axvline(es_cum_mc,      color<span class="op">=</span><span class="st">"darkred"</span>,  lw<span class="op">=</span><span class="dv">2</span>, ls<span class="op">=</span><span class="st">"--"</span>,    label<span class="op">=</span><span class="ss">f"ES  (MC) </span><span class="sc">{</span>es_cum_mc<span class="sc">:.2f}</span><span class="ss">%"</span>)</span>
-<span id="cb24-21"><a href="#cb24-21" aria-hidden="true" tabindex="-1"></a>ax.axvline(var_cum_scaled, color<span class="op">=</span><span class="st">"black"</span>,    lw<span class="op">=</span><span class="fl">1.5</span>, ls<span class="op">=</span><span class="st">":"</span>,   label<span class="op">=</span><span class="ss">f"VaR (scaling) </span><span class="sc">{</span>var_cum_scaled<span class="sc">:.2f}</span><span class="ss">%"</span>)</span>
-<span id="cb24-22"><a href="#cb24-22" aria-hidden="true" tabindex="-1"></a>ax.axvline(es_cum_scaled,      color<span class="op">=</span><span class="st">"black"</span>,  lw<span class="op">=</span><span class="dv">2</span>, ls<span class="op">=</span><span class="st">"--"</span>,    label<span class="op">=</span><span class="ss">f"ES  (scaling) </span><span class="sc">{</span>es_cum_scaled<span class="sc">:.2f}</span><span class="ss">%"</span>)</span>
-<span id="cb24-23"><a href="#cb24-23" aria-hidden="true" tabindex="-1"></a>ax.set_xlim(left<span class="op">=</span>np.quantile(cum_loss, <span class="fl">0.001</span>))</span>
-<span id="cb24-24"><a href="#cb24-24" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"10-day cumulative loss (%)"</span>)</span>
-<span id="cb24-25"><a href="#cb24-25" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">"Simulated 10-day loss distribution"</span>)</span>
-<span id="cb24-26"><a href="#cb24-26" aria-hidden="true" tabindex="-1"></a>ax.legend()</span>
-<span id="cb24-27"><a href="#cb24-27" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-28"><a href="#cb24-28" aria-hidden="true" tabindex="-1"></a>fig.suptitle(<span class="st">"S&amp;P 500 — 10-day VaR/ES forecast (FHS + EVT)"</span>, y<span class="op">=</span><span class="fl">1.02</span>)</span>
-<span id="cb24-29"><a href="#cb24-29" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
-<span id="cb24-30"><a href="#cb24-30" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>h_axis <span class="op">=</span> np.arange(<span class="dv">1</span>, <span class="dv">11</span>)</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(<span class="dv">1</span>, <span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">14</span>, <span class="dv">5</span>))</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a><span class="co"># (a) Daily path</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>ax <span class="op">=</span> axes[<span class="dv">0</span>]</span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>ax.plot(h_axis, var_path_mc,     <span class="st">"o-"</span>, color<span class="op">=</span><span class="st">"red"</span>,      label<span class="op">=</span><span class="st">"VaR — MC"</span>)</span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>ax.plot(h_axis, var_path_scaled, <span class="st">"s--"</span>, color<span class="op">=</span><span class="st">"red"</span>,     alpha<span class="op">=</span><span class="fl">0.6</span>, label<span class="op">=</span><span class="st">"VaR — scaling"</span>)</span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>ax.plot(h_axis, es_path_mc,      <span class="st">"o-"</span>,  color<span class="op">=</span><span class="st">"darkred"</span>, label<span class="op">=</span><span class="st">"ES — MC"</span>)</span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>ax.plot(h_axis, es_path_scaled,  <span class="st">"s--"</span>, color<span class="op">=</span><span class="st">"darkred"</span>, alpha<span class="op">=</span><span class="fl">0.6</span>, label<span class="op">=</span><span class="st">"ES — scaling"</span>)</span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Horizon (trading days)"</span>)</span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="ss">f"</span><span class="sc">{</span>alpha<span class="sc">:.0%}</span><span class="ss"> risk measure (% loss)"</span>)</span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">"Daily VaR / ES path"</span>)</span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>ax.legend()</span>
+<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a><span class="co"># (b) Cumulative distribution</span></span>
+<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a>ax <span class="op">=</span> axes[<span class="dv">1</span>]</span>
+<span id="cb23-17"><a href="#cb23-17" aria-hidden="true" tabindex="-1"></a>sns.histplot(cum_loss, bins<span class="op">=</span><span class="dv">80</span>, stat<span class="op">=</span><span class="st">"density"</span>, alpha<span class="op">=</span><span class="fl">0.5</span>,</span>
+<span id="cb23-18"><a href="#cb23-18" aria-hidden="true" tabindex="-1"></a>             color<span class="op">=</span><span class="st">"steelblue"</span>, edgecolor<span class="op">=</span><span class="st">"none"</span>, ax<span class="op">=</span>ax)</span>
+<span id="cb23-19"><a href="#cb23-19" aria-hidden="true" tabindex="-1"></a>ax.axvline(var_cum_mc,     color<span class="op">=</span><span class="st">"red"</span>,      lw<span class="op">=</span><span class="dv">2</span>,             label<span class="op">=</span><span class="ss">f"VaR (MC) </span><span class="sc">{</span>var_cum_mc<span class="sc">:.2f}</span><span class="ss">%"</span>)</span>
+<span id="cb23-20"><a href="#cb23-20" aria-hidden="true" tabindex="-1"></a>ax.axvline(es_cum_mc,      color<span class="op">=</span><span class="st">"darkred"</span>,  lw<span class="op">=</span><span class="dv">2</span>, ls<span class="op">=</span><span class="st">"--"</span>,    label<span class="op">=</span><span class="ss">f"ES  (MC) </span><span class="sc">{</span>es_cum_mc<span class="sc">:.2f}</span><span class="ss">%"</span>)</span>
+<span id="cb23-21"><a href="#cb23-21" aria-hidden="true" tabindex="-1"></a>ax.axvline(var_cum_scaled, color<span class="op">=</span><span class="st">"black"</span>,    lw<span class="op">=</span><span class="fl">1.5</span>, ls<span class="op">=</span><span class="st">":"</span>,   label<span class="op">=</span><span class="ss">f"VaR (scaling) </span><span class="sc">{</span>var_cum_scaled<span class="sc">:.2f}</span><span class="ss">%"</span>)</span>
+<span id="cb23-22"><a href="#cb23-22" aria-hidden="true" tabindex="-1"></a>ax.axvline(es_cum_scaled,      color<span class="op">=</span><span class="st">"black"</span>,  lw<span class="op">=</span><span class="dv">2</span>, ls<span class="op">=</span><span class="st">"--"</span>,    label<span class="op">=</span><span class="ss">f"ES  (scaling) </span><span class="sc">{</span>es_cum_scaled<span class="sc">:.2f}</span><span class="ss">%"</span>)</span>
+<span id="cb23-23"><a href="#cb23-23" aria-hidden="true" tabindex="-1"></a>ax.set_xlim(left<span class="op">=</span>np.quantile(cum_loss, <span class="fl">0.001</span>))</span>
+<span id="cb23-24"><a href="#cb23-24" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"10-day cumulative loss (%)"</span>)</span>
+<span id="cb23-25"><a href="#cb23-25" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">"Simulated 10-day loss distribution"</span>)</span>
+<span id="cb23-26"><a href="#cb23-26" aria-hidden="true" tabindex="-1"></a>ax.legend()</span>
+<span id="cb23-27"><a href="#cb23-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-28"><a href="#cb23-28" aria-hidden="true" tabindex="-1"></a>fig.suptitle(<span class="st">"S&amp;P 500 — 10-day VaR/ES forecast (FHS + EVT)"</span>, y<span class="op">=</span><span class="fl">1.02</span>)</span>
+<span id="cb23-29"><a href="#cb23-29" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb23-30"><a href="#cb23-30" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-display">
 <div id="mc-plot" class="quarto-figure quarto-figure-center anchored">
 <figure class="figure">
@@ -679,33 +701,33 @@ Christoffersen CC:  LR=4.563, p=0.1021</code></pre>
 </div>
 </div>
 <div id="mc-bayesian-predictive" class="cell" data-execution_count="17">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>n_post   <span class="op">=</span> <span class="dv">400</span></span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>rng_idx  <span class="op">=</span> np.random.default_rng(<span class="dv">0</span>)</span>
-<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>idx      <span class="op">=</span> rng_idx.choice(<span class="bu">len</span>(xi), n_post, replace<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>cum_pool <span class="op">=</span> []</span>
-<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> k <span class="kw">in</span> idx:</span>
-<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>    s <span class="op">=</span> simulate_garch_evt(result, std_resid, threshold<span class="op">=</span>u,</span>
-<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a>                           xi<span class="op">=</span>xi[k], sigma_gpd<span class="op">=</span>beta[k],</span>
-<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>                           horizon<span class="op">=</span><span class="dv">10</span>, n_sims<span class="op">=</span><span class="dv">2_000</span>, seed<span class="op">=</span><span class="bu">int</span>(k))</span>
-<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>    cum_pool.append((<span class="fl">1.0</span> <span class="op">-</span> np.prod(<span class="fl">1.0</span> <span class="op">+</span> s <span class="op">/</span> <span class="fl">100.0</span>, axis<span class="op">=</span><span class="dv">1</span>)) <span class="op">*</span> <span class="fl">100.0</span>)</span>
-<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>cum_pool <span class="op">=</span> np.concatenate(cum_pool)</span>
-<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a>var_cum_bayes <span class="op">=</span> np.quantile(cum_pool, alpha)</span>
-<span id="cb25-14"><a href="#cb25-14" aria-hidden="true" tabindex="-1"></a>es_cum_bayes  <span class="op">=</span> cum_pool[cum_pool <span class="op">&gt;=</span> var_cum_bayes].mean()</span>
-<span id="cb25-15"><a href="#cb25-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-16"><a href="#cb25-16" aria-hidden="true" tabindex="-1"></a><span class="co"># Per-posterior-draw quantile, to get a credible interval on VaR itself</span></span>
-<span id="cb25-17"><a href="#cb25-17" aria-hidden="true" tabindex="-1"></a>var_per_draw <span class="op">=</span> np.array([</span>
-<span id="cb25-18"><a href="#cb25-18" aria-hidden="true" tabindex="-1"></a>    np.quantile(c, alpha) <span class="cf">for</span> c <span class="kw">in</span> np.split(cum_pool, n_post)</span>
-<span id="cb25-19"><a href="#cb25-19" aria-hidden="true" tabindex="-1"></a>])</span>
-<span id="cb25-20"><a href="#cb25-20" aria-hidden="true" tabindex="-1"></a>ci <span class="op">=</span> np.percentile(var_per_draw, [<span class="fl">2.5</span>, <span class="fl">97.5</span>])</span>
-<span id="cb25-21"><a href="#cb25-21" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-22"><a href="#cb25-22" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"10-day VaR</span><span class="sc">{</span>alpha<span class="sc">:.0%}</span><span class="ss"> (Bayesian predictive): "</span></span>
-<span id="cb25-23"><a href="#cb25-23" aria-hidden="true" tabindex="-1"></a>      <span class="ss">f"</span><span class="sc">{</span>var_cum_bayes<span class="sc">:.2f}</span><span class="ss">%  CI95 [</span><span class="sc">{</span>ci[<span class="dv">0</span>]<span class="sc">:.2f}</span><span class="ss">%, </span><span class="sc">{</span>ci[<span class="dv">1</span>]<span class="sc">:.2f}</span><span class="ss">%]"</span>)</span>
-<span id="cb25-24"><a href="#cb25-24" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"10-day ES</span><span class="sc">{</span>alpha<span class="sc">:.0%}</span><span class="ss">  (Bayesian predictive): </span><span class="sc">{</span>es_cum_bayes<span class="sc">:.2f}</span><span class="ss">%"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>n_post   <span class="op">=</span> <span class="dv">400</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>rng_idx  <span class="op">=</span> np.random.default_rng(<span class="dv">0</span>)</span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>idx      <span class="op">=</span> rng_idx.choice(<span class="bu">len</span>(xi), n_post, replace<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>cum_pool <span class="op">=</span> []</span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> k <span class="kw">in</span> idx:</span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>    s <span class="op">=</span> simulate_garch_evt(result, std_resid, threshold<span class="op">=</span>u,</span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a>                           xi<span class="op">=</span>xi[k], sigma_gpd<span class="op">=</span>beta[k],</span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a>                           horizon<span class="op">=</span><span class="dv">10</span>, n_sims<span class="op">=</span><span class="dv">2_000</span>, seed<span class="op">=</span><span class="bu">int</span>(k))</span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>    cum_pool.append((<span class="fl">1.0</span> <span class="op">-</span> np.prod(<span class="fl">1.0</span> <span class="op">+</span> s <span class="op">/</span> <span class="fl">100.0</span>, axis<span class="op">=</span><span class="dv">1</span>)) <span class="op">*</span> <span class="fl">100.0</span>)</span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a>cum_pool <span class="op">=</span> np.concatenate(cum_pool)</span>
+<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a>var_cum_bayes <span class="op">=</span> np.quantile(cum_pool, alpha)</span>
+<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a>es_cum_bayes  <span class="op">=</span> cum_pool[cum_pool <span class="op">&gt;=</span> var_cum_bayes].mean()</span>
+<span id="cb24-15"><a href="#cb24-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-16"><a href="#cb24-16" aria-hidden="true" tabindex="-1"></a><span class="co"># Per-posterior-draw quantile, to get a credible interval on VaR itself</span></span>
+<span id="cb24-17"><a href="#cb24-17" aria-hidden="true" tabindex="-1"></a>var_per_draw <span class="op">=</span> np.array([</span>
+<span id="cb24-18"><a href="#cb24-18" aria-hidden="true" tabindex="-1"></a>    np.quantile(c, alpha) <span class="cf">for</span> c <span class="kw">in</span> np.split(cum_pool, n_post)</span>
+<span id="cb24-19"><a href="#cb24-19" aria-hidden="true" tabindex="-1"></a>])</span>
+<span id="cb24-20"><a href="#cb24-20" aria-hidden="true" tabindex="-1"></a>ci <span class="op">=</span> np.percentile(var_per_draw, [<span class="fl">2.5</span>, <span class="fl">97.5</span>])</span>
+<span id="cb24-21"><a href="#cb24-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-22"><a href="#cb24-22" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"10-day VaR</span><span class="sc">{</span>alpha<span class="sc">:.0%}</span><span class="ss"> (Bayesian predictive): "</span></span>
+<span id="cb24-23"><a href="#cb24-23" aria-hidden="true" tabindex="-1"></a>      <span class="ss">f"</span><span class="sc">{</span>var_cum_bayes<span class="sc">:.2f}</span><span class="ss">%  CI95 [</span><span class="sc">{</span>ci[<span class="dv">0</span>]<span class="sc">:.2f}</span><span class="ss">%, </span><span class="sc">{</span>ci[<span class="dv">1</span>]<span class="sc">:.2f}</span><span class="ss">%]"</span>)</span>
+<span id="cb24-24"><a href="#cb24-24" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"10-day ES</span><span class="sc">{</span>alpha<span class="sc">:.0%}</span><span class="ss">  (Bayesian predictive): </span><span class="sc">{</span>es_cum_bayes<span class="sc">:.2f}</span><span class="ss">%"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>10-day VaR99% (Bayesian predictive): 7.84%  CI95 [6.89%, 8.88%]
-10-day ES99%  (Bayesian predictive): 10.47%</code></pre>
+<pre><code>10-day VaR99% (Bayesian predictive): 8.25%  CI95 [7.35%, 9.34%]
+10-day ES99%  (Bayesian predictive): 10.97%</code></pre>
 </div>
 </div>
 </section>
@@ -718,10 +740,10 @@ Christoffersen CC:  LR=4.563, p=0.1021</code></pre>
 \]</span></p>
 <p>which can be read directly from the fitted GPD via the standard POT formula.</p>
 <p>The fitting procedure mirrors the conditional analysis exactly; I therefore restrict the commentary to features specific to the unconditional setting.</p>
-<div id="97936f3c" class="cell" data-execution_count="18">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>pyextremes.plot_mean_residual_life(log_losses)</span>
-<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>pyextremes.plot_parameter_stability(log_losses)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-display" data-execution_count="40">
+<div id="19f6ea60" class="cell" data-execution_count="18">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>pyextremes.plot_mean_residual_life(log_losses)</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>pyextremes.plot_parameter_stability(log_losses)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="18">
 <pre><code>(&lt;Axes: ylabel='Shape, $\\xi$'&gt;,
  &lt;Axes: xlabel='Threshold', ylabel='Modified scale, $\\sigma^*$'&gt;)</code></pre>
 </div>
@@ -741,11 +763,11 @@ Christoffersen CC:  LR=4.563, p=0.1021</code></pre>
 </div>
 </div>
 <p>A notable difference from the conditional analysis is the instability of the GPD parameter estimates. The parameter stability plot reveals no clear region where both <span class="math inline">\(\xi\)</span> and <span class="math inline">\(\sigma^*\)</span> stabilise simultaneously, making threshold selection considerably more difficult. This is a direct consequence of the volatility clustering present in raw log-losses: since large losses tend to occur in bursts, the tail behaviour of the unfiltered series is less well described by a stationary GPD than that of the GARCH residuals.</p>
-<div id="07ac7503" class="cell" data-execution_count="19">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exceedances at u=0.02: </span><span class="sc">{</span>np<span class="sc">.</span><span class="bu">sum</span>(log_losses <span class="op">&gt;</span> <span class="fl">0.02</span>)<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exceedances at u=0.0225: </span><span class="sc">{</span>np<span class="sc">.</span><span class="bu">sum</span>(log_losses <span class="op">&gt;</span> <span class="fl">0.0225</span>)<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exceedances at u=0.024: </span><span class="sc">{</span>np<span class="sc">.</span><span class="bu">sum</span>(log_losses <span class="op">&gt;</span> <span class="fl">0.024</span>)<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>n_exceed_u_2 <span class="op">=</span> <span class="bu">int</span>(np.<span class="bu">sum</span>(log_losses <span class="op">&gt;</span> <span class="fl">0.024</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div id="53cfd196" class="cell" data-execution_count="19">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exceedances at u=0.02: </span><span class="sc">{</span>np<span class="sc">.</span><span class="bu">sum</span>(log_losses <span class="op">&gt;</span> <span class="fl">0.02</span>)<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exceedances at u=0.0225: </span><span class="sc">{</span>np<span class="sc">.</span><span class="bu">sum</span>(log_losses <span class="op">&gt;</span> <span class="fl">0.0225</span>)<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exceedances at u=0.024: </span><span class="sc">{</span>np<span class="sc">.</span><span class="bu">sum</span>(log_losses <span class="op">&gt;</span> <span class="fl">0.024</span>)<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>n_exceed_u_2 <span class="op">=</span> <span class="bu">int</span>(np.<span class="bu">sum</span>(log_losses <span class="op">&gt;</span> <span class="fl">0.024</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>Exceedances at u=0.02: 380
 Exceedances at u=0.0225: 294
@@ -753,25 +775,24 @@ Exceedances at u=0.024: 242</code></pre>
 </div>
 </div>
 <p>Despite the instability in the parameter plots, the exceedance count of 242 at <span class="math inline">\(u = 0.024\)</span> provides a sufficient basis for GPD estimation, and I proceed with this threshold.</p>
-<div id="d1c66366" class="cell" data-execution_count="20">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> EVA(data<span class="op">=</span>log_losses)</span>
-<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>model.get_extremes(method<span class="op">=</span><span class="st">"POT"</span>, threshold<span class="op">=</span><span class="fl">0.024</span>)</span>
-<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> Pool(<span class="dv">10</span>) <span class="im">as</span> pool:</span>
-<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>    model.fit_model(</span>
-<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>        distribution<span class="op">=</span><span class="st">"genpareto"</span>,</span>
-<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>        model<span class="op">=</span><span class="st">"Emcee"</span>,</span>
-<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a>        n_walkers<span class="op">=</span><span class="dv">100</span>,</span>
-<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a>        n_samples<span class="op">=</span><span class="dv">2000</span>,</span>
-<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a>        pool<span class="op">=</span>pool,</span>
-<span id="cb31-11"><a href="#cb31-11" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb31-12"><a href="#cb31-12" aria-hidden="true" tabindex="-1"></a>model.plot_diagnostic()</span>
-<span id="cb31-13"><a href="#cb31-13" aria-hidden="true" tabindex="-1"></a>model.plot_trace()</span>
-<span id="cb31-14"><a href="#cb31-14" aria-hidden="true" tabindex="-1"></a>model.plot_corner()</span>
-<span id="cb31-15"><a href="#cb31-15" aria-hidden="true" tabindex="-1"></a>trace <span class="op">=</span> model.model.trace</span>
-<span id="cb31-16"><a href="#cb31-16" aria-hidden="true" tabindex="-1"></a>trace.shape[<span class="dv">1</span>] <span class="op">//</span> <span class="dv">2</span></span>
-<span id="cb31-17"><a href="#cb31-17" aria-hidden="true" tabindex="-1"></a>burn_in <span class="op">=</span> trace.shape[<span class="dv">1</span>] <span class="op">//</span> <span class="dv">2</span></span>
-<span id="cb31-18"><a href="#cb31-18" aria-hidden="true" tabindex="-1"></a>samples_naive <span class="op">=</span> trace[:, burn_in:, :].reshape(<span class="op">-</span><span class="dv">1</span>, trace.shape[<span class="dv">2</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div id="366994f8" class="cell" data-execution_count="20">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> EVA(data<span class="op">=</span>log_losses)</span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>model.get_extremes(method<span class="op">=</span><span class="st">"POT"</span>, threshold<span class="op">=</span><span class="fl">0.024</span>)</span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> Pool(<span class="dv">10</span>) <span class="im">as</span> pool:</span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>    model.fit_model(</span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a>        distribution<span class="op">=</span><span class="st">"genpareto"</span>,</span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a>        model<span class="op">=</span><span class="st">"Emcee"</span>,</span>
+<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a>        n_walkers<span class="op">=</span><span class="dv">100</span>,</span>
+<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a>        n_samples<span class="op">=</span><span class="dv">2000</span>,</span>
+<span id="cb30-10"><a href="#cb30-10" aria-hidden="true" tabindex="-1"></a>        pool<span class="op">=</span>pool,</span>
+<span id="cb30-11"><a href="#cb30-11" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb30-12"><a href="#cb30-12" aria-hidden="true" tabindex="-1"></a>model.plot_diagnostic()</span>
+<span id="cb30-13"><a href="#cb30-13" aria-hidden="true" tabindex="-1"></a>model.plot_trace()</span>
+<span id="cb30-14"><a href="#cb30-14" aria-hidden="true" tabindex="-1"></a>model.plot_corner()</span>
+<span id="cb30-15"><a href="#cb30-15" aria-hidden="true" tabindex="-1"></a>trace <span class="op">=</span> model.model.trace</span>
+<span id="cb30-16"><a href="#cb30-16" aria-hidden="true" tabindex="-1"></a>burn_in <span class="op">=</span> trace.shape[<span class="dv">1</span>] <span class="op">//</span> <span class="dv">2</span></span>
+<span id="cb30-17"><a href="#cb30-17" aria-hidden="true" tabindex="-1"></a>samples_naive <span class="op">=</span> trace[:, burn_in:, :].reshape(<span class="op">-</span><span class="dv">1</span>, trace.shape[<span class="dv">2</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
@@ -789,7 +810,7 @@ Exceedances at u=0.024: 242</code></pre>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="SP500_POT_Analysis_files/figure-html/cell-21-output-3.png" width="683" height="651" class="figure-img"></p>
+<p><img src="SP500_POT_Analysis_files/figure-html/cell-21-output-3.png" width="691" height="651" class="figure-img"></p>
 </figure>
 </div>
 </div>
@@ -798,58 +819,58 @@ Exceedances at u=0.024: 242</code></pre>
 <section id="calculating-return-levels" class="level3">
 <h3 class="anchored" data-anchor-id="calculating-return-levels">Calculating return levels</h3>
 <p>Using the posterior distribution of <span class="math inline">\((\xi, \sigma)\)</span>, return levels are computed by substituting the <span class="math inline">\(T\)</span>-year confidence level into the standard POT formula, for <span class="math inline">\(T \in \{1, 5, 10, 20, 50\}\)</span> years.</p>
-<div id="fd9f497f" class="cell" data-execution_count="21">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>u <span class="op">=</span> <span class="fl">0.024</span></span>
-<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>n_u <span class="op">=</span> <span class="bu">len</span>(model.extremes)  </span>
-<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>n <span class="op">=</span> <span class="bu">len</span>(log_losses)</span>
-<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>f_bar_u <span class="op">=</span> n_u <span class="op">/</span> n</span>
-<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>T_values <span class="op">=</span> [<span class="dv">1</span>, <span class="dv">5</span>, <span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">50</span>]</span>
-<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a>alpha_naive <span class="op">=</span> <span class="dv">1</span> <span class="op">-</span> <span class="dv">1</span><span class="op">/</span>(np.array(T_values)<span class="op">*</span><span class="dv">250</span>)</span>
-<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>results_naive <span class="op">=</span> {}</span>
-<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> T, a <span class="kw">in</span> <span class="bu">zip</span>(T_values, alpha_naive):</span>
-<span id="cb32-9"><a href="#cb32-9" aria-hidden="true" tabindex="-1"></a>    results_naive[T] <span class="op">=</span> np.array(  </span>
-<span id="cb32-10"><a href="#cb32-10" aria-hidden="true" tabindex="-1"></a>    [</span>
-<span id="cb32-11"><a href="#cb32-11" aria-hidden="true" tabindex="-1"></a>        u <span class="op">+</span> s[<span class="dv">1</span>] <span class="op">/</span> s[<span class="dv">0</span>] <span class="op">*</span> (((<span class="dv">1</span> <span class="op">-</span> a) <span class="op">/</span> f_bar_u) <span class="op">**</span> (<span class="op">-</span>s[<span class="dv">0</span>]) <span class="op">-</span> <span class="dv">1</span>)</span>
-<span id="cb32-12"><a href="#cb32-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> s <span class="kw">in</span> samples_naive</span>
-<span id="cb32-13"><a href="#cb32-13" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> s[<span class="dv">0</span>] <span class="op">&gt;</span> <span class="dv">0</span> <span class="kw">and</span> s[<span class="dv">1</span>] <span class="op">&gt;</span> <span class="dv">0</span></span>
-<span id="cb32-14"><a href="#cb32-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb32-15"><a href="#cb32-15" aria-hidden="true" tabindex="-1"></a>    ]</span>
-<span id="cb32-16"><a href="#cb32-16" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb32-17"><a href="#cb32-17" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> T, r <span class="kw">in</span> results_naive.items():</span>
-<span id="cb32-18"><a href="#cb32-18" aria-hidden="true" tabindex="-1"></a>    r_med <span class="op">=</span> np.median(r)</span>
-<span id="cb32-19"><a href="#cb32-19" aria-hidden="true" tabindex="-1"></a>    ci_lower, ci_upper <span class="op">=</span> np.percentile(r, [<span class="fl">2.5</span>, <span class="fl">97.5</span>])</span>
-<span id="cb32-20"><a href="#cb32-20" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(</span>
-<span id="cb32-21"><a href="#cb32-21" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>T<span class="sc">}</span><span class="ss">-year VaR_</span><span class="sc">{</span>T<span class="sc">}</span><span class="ss">: </span><span class="sc">{</span>(<span class="dv">1</span> <span class="op">-</span> np.exp(<span class="op">-</span>r_med)) <span class="op">*</span> <span class="dv">100</span><span class="sc">:.2f}</span><span class="ss">% "</span></span>
-<span id="cb32-22"><a href="#cb32-22" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"[</span><span class="sc">{</span>(<span class="dv">1</span> <span class="op">-</span> np.exp(<span class="op">-</span>ci_lower)) <span class="op">*</span> <span class="dv">100</span><span class="sc">:.2f}</span><span class="ss">%, "</span></span>
-<span id="cb32-23"><a href="#cb32-23" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>(<span class="dv">1</span> <span class="op">-</span> np.exp(<span class="op">-</span>ci_upper)) <span class="op">*</span> <span class="dv">100</span><span class="sc">:.2f}</span><span class="ss">%]"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div id="cfa50556" class="cell" data-execution_count="21">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>u <span class="op">=</span> <span class="fl">0.024</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>n_u <span class="op">=</span> <span class="bu">len</span>(model.extremes)  </span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>n <span class="op">=</span> <span class="bu">len</span>(log_losses)</span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>f_bar_u <span class="op">=</span> n_u <span class="op">/</span> n</span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>T_values <span class="op">=</span> [<span class="dv">1</span>, <span class="dv">5</span>, <span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">50</span>]</span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>alpha_naive <span class="op">=</span> <span class="dv">1</span> <span class="op">-</span> <span class="dv">1</span><span class="op">/</span>(np.array(T_values)<span class="op">*</span><span class="dv">250</span>)</span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>results_naive <span class="op">=</span> {}</span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> T, a <span class="kw">in</span> <span class="bu">zip</span>(T_values, alpha_naive):</span>
+<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a>    results_naive[T] <span class="op">=</span> np.array(  </span>
+<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a>    [</span>
+<span id="cb31-11"><a href="#cb31-11" aria-hidden="true" tabindex="-1"></a>        u <span class="op">+</span> s[<span class="dv">1</span>] <span class="op">/</span> s[<span class="dv">0</span>] <span class="op">*</span> (((<span class="dv">1</span> <span class="op">-</span> a) <span class="op">/</span> f_bar_u) <span class="op">**</span> (<span class="op">-</span>s[<span class="dv">0</span>]) <span class="op">-</span> <span class="dv">1</span>)</span>
+<span id="cb31-12"><a href="#cb31-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> s <span class="kw">in</span> samples_naive</span>
+<span id="cb31-13"><a href="#cb31-13" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> s[<span class="dv">0</span>] <span class="op">&gt;</span> <span class="dv">0</span> <span class="kw">and</span> s[<span class="dv">1</span>] <span class="op">&gt;</span> <span class="dv">0</span></span>
+<span id="cb31-14"><a href="#cb31-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-15"><a href="#cb31-15" aria-hidden="true" tabindex="-1"></a>    ]</span>
+<span id="cb31-16"><a href="#cb31-16" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb31-17"><a href="#cb31-17" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> T, r <span class="kw">in</span> results_naive.items():</span>
+<span id="cb31-18"><a href="#cb31-18" aria-hidden="true" tabindex="-1"></a>    r_med <span class="op">=</span> np.median(r)</span>
+<span id="cb31-19"><a href="#cb31-19" aria-hidden="true" tabindex="-1"></a>    ci_lower, ci_upper <span class="op">=</span> np.percentile(r, [<span class="fl">2.5</span>, <span class="fl">97.5</span>])</span>
+<span id="cb31-20"><a href="#cb31-20" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(</span>
+<span id="cb31-21"><a href="#cb31-21" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>T<span class="sc">}</span><span class="ss">-year VaR_</span><span class="sc">{</span>T<span class="sc">}</span><span class="ss">: </span><span class="sc">{</span>(<span class="dv">1</span> <span class="op">-</span> np.exp(<span class="op">-</span>r_med)) <span class="op">*</span> <span class="dv">100</span><span class="sc">:.2f}</span><span class="ss">% "</span></span>
+<span id="cb31-22"><a href="#cb31-22" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"[</span><span class="sc">{</span>(<span class="dv">1</span> <span class="op">-</span> np.exp(<span class="op">-</span>ci_lower)) <span class="op">*</span> <span class="dv">100</span><span class="sc">:.2f}</span><span class="ss">%, "</span></span>
+<span id="cb31-23"><a href="#cb31-23" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>(<span class="dv">1</span> <span class="op">-</span> np.exp(<span class="op">-</span>ci_upper)) <span class="op">*</span> <span class="dv">100</span><span class="sc">:.2f}</span><span class="ss">%]"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>1-year VaR_1: 4.10% [3.83%, 4.42%]
-5-year VaR_5: 7.08% [6.15%, 8.67%]
-10-year VaR_10: 8.92% [7.39%, 11.84%]
-20-year VaR_20: 11.20% [8.78%, 16.28%]
-50-year VaR_50: 15.06% [10.89%, 24.73%]</code></pre>
+<pre><code>1-year VaR_1: 4.10% [3.84%, 4.42%]
+5-year VaR_5: 7.08% [6.14%, 8.72%]
+10-year VaR_10: 8.93% [7.38%, 11.93%]
+20-year VaR_20: 11.23% [8.78%, 16.43%]
+50-year VaR_50: 15.10% [10.87%, 24.97%]</code></pre>
 </div>
 </div>
-<div id="d7660ce8" class="cell" data-execution_count="22">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>T_values <span class="op">=</span> [<span class="dv">1</span>, <span class="dv">5</span>, <span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">50</span>]</span>
-<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>medians <span class="op">=</span> [np.median(results_naive[T]) <span class="cf">for</span> T <span class="kw">in</span> T_values]</span>
-<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>ci_lower <span class="op">=</span> [np.percentile(results_naive[T], <span class="fl">2.5</span>) <span class="cf">for</span> T <span class="kw">in</span> T_values]</span>
-<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>ci_upper <span class="op">=</span> [np.percentile(results_naive[T], <span class="fl">97.5</span>) <span class="cf">for</span> T <span class="kw">in</span> T_values]</span>
-<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Convert from log-loss to simple return</span></span>
-<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a>medians_pct <span class="op">=</span> [(<span class="dv">1</span> <span class="op">-</span> np.exp(<span class="op">-</span>m)) <span class="op">*</span> <span class="dv">100</span> <span class="cf">for</span> m <span class="kw">in</span> medians]</span>
-<span id="cb34-8"><a href="#cb34-8" aria-hidden="true" tabindex="-1"></a>ci_lower_pct <span class="op">=</span> [(<span class="dv">1</span> <span class="op">-</span> np.exp(<span class="op">-</span>c)) <span class="op">*</span> <span class="dv">100</span> <span class="cf">for</span> c <span class="kw">in</span> ci_lower]</span>
-<span id="cb34-9"><a href="#cb34-9" aria-hidden="true" tabindex="-1"></a>ci_upper_pct <span class="op">=</span> [(<span class="dv">1</span> <span class="op">-</span> np.exp(<span class="op">-</span>c)) <span class="op">*</span> <span class="dv">100</span> <span class="cf">for</span> c <span class="kw">in</span> ci_upper]</span>
-<span id="cb34-10"><a href="#cb34-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-11"><a href="#cb34-11" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">10</span>, <span class="dv">5</span>))</span>
-<span id="cb34-12"><a href="#cb34-12" aria-hidden="true" tabindex="-1"></a>ax.plot(T_values, medians_pct, <span class="st">"o-"</span>, color<span class="op">=</span><span class="st">"red"</span>, lw<span class="op">=</span><span class="dv">2</span>, label<span class="op">=</span><span class="st">"Return Level (median)"</span>)</span>
-<span id="cb34-13"><a href="#cb34-13" aria-hidden="true" tabindex="-1"></a>ax.fill_between(T_values, ci_lower_pct, ci_upper_pct, color<span class="op">=</span><span class="st">"red"</span>, alpha<span class="op">=</span><span class="fl">0.2</span>, label<span class="op">=</span><span class="st">"95% Credible Interval"</span>)</span>
-<span id="cb34-14"><a href="#cb34-14" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Return Period (years)"</span>)</span>
-<span id="cb34-15"><a href="#cb34-15" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">"Loss (%)"</span>)</span>
-<span id="cb34-16"><a href="#cb34-16" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">"S&amp;P 500 — Return Levels (Unconditional POT)"</span>)</span>
-<span id="cb34-17"><a href="#cb34-17" aria-hidden="true" tabindex="-1"></a>ax.legend()</span>
-<span id="cb34-18"><a href="#cb34-18" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
-<span id="cb34-19"><a href="#cb34-19" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div id="231f8136" class="cell" data-execution_count="22">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>T_values <span class="op">=</span> [<span class="dv">1</span>, <span class="dv">5</span>, <span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">50</span>]</span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>medians <span class="op">=</span> [np.median(results_naive[T]) <span class="cf">for</span> T <span class="kw">in</span> T_values]</span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>ci_lower <span class="op">=</span> [np.percentile(results_naive[T], <span class="fl">2.5</span>) <span class="cf">for</span> T <span class="kw">in</span> T_values]</span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>ci_upper <span class="op">=</span> [np.percentile(results_naive[T], <span class="fl">97.5</span>) <span class="cf">for</span> T <span class="kw">in</span> T_values]</span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Convert from log-loss to simple return</span></span>
+<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a>medians_pct <span class="op">=</span> [(<span class="dv">1</span> <span class="op">-</span> np.exp(<span class="op">-</span>m)) <span class="op">*</span> <span class="dv">100</span> <span class="cf">for</span> m <span class="kw">in</span> medians]</span>
+<span id="cb33-8"><a href="#cb33-8" aria-hidden="true" tabindex="-1"></a>ci_lower_pct <span class="op">=</span> [(<span class="dv">1</span> <span class="op">-</span> np.exp(<span class="op">-</span>c)) <span class="op">*</span> <span class="dv">100</span> <span class="cf">for</span> c <span class="kw">in</span> ci_lower]</span>
+<span id="cb33-9"><a href="#cb33-9" aria-hidden="true" tabindex="-1"></a>ci_upper_pct <span class="op">=</span> [(<span class="dv">1</span> <span class="op">-</span> np.exp(<span class="op">-</span>c)) <span class="op">*</span> <span class="dv">100</span> <span class="cf">for</span> c <span class="kw">in</span> ci_upper]</span>
+<span id="cb33-10"><a href="#cb33-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-11"><a href="#cb33-11" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">10</span>, <span class="dv">5</span>))</span>
+<span id="cb33-12"><a href="#cb33-12" aria-hidden="true" tabindex="-1"></a>ax.plot(T_values, medians_pct, <span class="st">"o-"</span>, color<span class="op">=</span><span class="st">"red"</span>, lw<span class="op">=</span><span class="dv">2</span>, label<span class="op">=</span><span class="st">"Return Level (median)"</span>)</span>
+<span id="cb33-13"><a href="#cb33-13" aria-hidden="true" tabindex="-1"></a>ax.fill_between(T_values, ci_lower_pct, ci_upper_pct, color<span class="op">=</span><span class="st">"red"</span>, alpha<span class="op">=</span><span class="fl">0.2</span>, label<span class="op">=</span><span class="st">"95% Credible Interval"</span>)</span>
+<span id="cb33-14"><a href="#cb33-14" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"Return Period (years)"</span>)</span>
+<span id="cb33-15"><a href="#cb33-15" aria-hidden="true" tabindex="-1"></a>ax.set_ylabel(<span class="st">"Loss (%)"</span>)</span>
+<span id="cb33-16"><a href="#cb33-16" aria-hidden="true" tabindex="-1"></a>ax.set_title(<span class="st">"S&amp;P 500 — Return Levels (Unconditional POT)"</span>)</span>
+<span id="cb33-17"><a href="#cb33-17" aria-hidden="true" tabindex="-1"></a>ax.legend()</span>
+<span id="cb33-18"><a href="#cb33-18" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb33-19"><a href="#cb33-19" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
@@ -863,7 +884,7 @@ Exceedances at u=0.024: 242</code></pre>
 </section>
 <section id="conclusion" class="level2">
 <h2 class="anchored" data-anchor-id="conclusion">Conclusion</h2>
-<p>As McNeil &amp; Frey (2000) demonstrated, conditional and unconditional POT analysis are not competing approaches but complementary ones, as they address fundamentally different questions. The conditional model — combining GARCH pre-filtering with GPD tail estimation — is suited for short-term risk management: it captures the current volatility regime and produces dynamic VaR and ES estimates that respond to changing market conditions. The unconditional model, applied directly to the raw log-loss series, is better suited for long-run tail characterisation via return levels, provided that the tail behaviour of the return series is sufficiently stable over the sample period — an assumption that is difficult to verify over a 46-year window but is at least partially mitigated by the use of a long sample that covers multiple structural regimes. .</p>
+<p>As McNeil &amp; Frey (2000) demonstrated, conditional and unconditional POT analysis are not competing approaches but complementary ones, as they address fundamentally different questions. The conditional model — combining GARCH pre-filtering with GPD tail estimation — is suited for short-term risk management: it captures the current volatility regime and produces dynamic VaR and ES estimates that respond to changing market conditions. The unconditional model, applied directly to the raw log-loss series, is better suited for long-run tail characterisation via return levels, provided that the tail behaviour of the return series is sufficiently stable over the sample period — an assumption that is difficult to verify over a 46-year window but is at least partially mitigated by the use of a long sample that covers multiple structural regimes.</p>
 <p>A further methodological contribution of this project is the use of Bayesian inference via MCMC rather than maximum likelihood estimation for the GPD parameters. Since different parameter values can have substantial consequences for risk measure estimates, propagating the full posterior distribution through the VaR and ES formulas provides a more honest account of estimation uncertainty than a single point estimate would.</p>
 <p>The rolling-window backtest over 43 years yields an empirical violation rate close to the nominal 1%, and the Kupiec test does not reject correct unconditional coverage (<span class="math inline">\(p =\)</span> 0.70). The main limitation is violation clustering: the Christoffersen independence test rejects at the 5% level (<span class="math inline">\(p =\)</span> 0.036), and the conditional coverage test is borderline (<span class="math inline">\(p =\)</span> 0.10). This residual dependence reflects the well-known limitations of GARCH(1,1) — its symmetric treatment of positive and negative shocks and its Gaussian innovation assumption — and motivates natural extensions such as GJR-GARCH or a Student-<span class="math inline">\(t\)</span> innovation distribution.</p>
 </section>
