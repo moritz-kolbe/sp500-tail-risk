@@ -60,6 +60,8 @@ quarto render SP500_POT_Analysis.qmd --to html
 The backtest uses `multiprocessing.Pool` and is parallelised across available 
 CPU cores. Adjust the number of workers in the Pool calls to match your machine.
 
+Quarto must be installed separately: [quarto.org/docs/get-started](https://quarto.org/docs/get-started/)
+
 ## References
 
 McNeil, A.J. & Frey, R. (2000). Estimation of tail-related risk measures for 
