@@ -7,34 +7,6 @@ format:
     toc-title: "Contents"
 ---
 
-::::: {.callout-note appearance="simple"}
-## Visual Abstract
-
-:::: {.columns}
-
-::: {.column width="33%"}
-**Approach**
-
-GARCH(1,1) volatility prefilter, then Peaks-over-Threshold (GPD) on the
-standardized residuals — fit by MLE and Bayesian MCMC (`emcee`).
-:::
-
-::: {.column width="33%"}
-**Headline Result**
-
-Conditional 99% VaR / ES with posterior credible intervals; evaluated
-out-of-sample on a rolling window over 10,691 observations.
-:::
-
-::: {.column width="33%"}
-**Validation**
-
-Violation rate 1.03% vs. 1% nominal. Kupiec p = 0.77, conditional
-coverage p = 0.10 — coverage not rejected.
-:::
-
-::::
-:::::
 
 ## Problem Statement and Objectives
 This project demonstrates two complementary approaches to tail risk estimation 
