@@ -4,6 +4,7 @@ scipy
 numpy
 pandas
 matplotlib
+seaborn
 pyextremes
 emcee
 corner
