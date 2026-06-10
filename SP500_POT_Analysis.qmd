@@ -114,7 +114,7 @@ modelling would be needed (forthcoming).
 I use daily S&P 500 closing prices from 1980 onwards. There are two main reasons for this long sample window.
 
 ```{python}
-prices = yf.download("^GSPC", start="1980-01-01")[
+prices = yf.download("^GSPC", start="1980-01-01", progress=False)[
     "Close"
 ]  # on single stocks Adj.Close
 returns_dec = prices.pct_change().dropna().squeeze()  # squeze for series format
