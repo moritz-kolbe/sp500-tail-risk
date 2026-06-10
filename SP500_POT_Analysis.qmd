@@ -7,66 +7,34 @@ format:
     toc-title: "Contents"
 ---
 
-<div style="border:1px solid #d0d0d0; border-radius:8px; padding:22px 26px; margin-bottom:32px; background:#f9f9f9;">
-  <div style="font-size:0.8em; font-weight:600; color:#888; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:14px;">Project Summary</div>
-  <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:28px;">
+::::: {.callout-note appearance="simple"}
+## Visual Abstract
 
-    <div>
-      <div style="font-weight:600; color:#333; margin-bottom:8px;">Research Question</div>
-      <div style="font-size:0.9em; color:#444; line-height:1.55;">
-        Does GARCH prefiltering followed by POT/GPD estimation produce well-calibrated
-        conditional tail risk estimates for the S&amp;P 500? How much does the
-        square-root-of-time rule overstate 10-day risk under GARCH dynamics?
-        A complementary unconditional analysis characterises long-run tail behaviour
-        via return levels.
-      </div>
-    </div>
+:::: {.columns}
 
-    <div>
-      <div style="font-weight:600; color:#333; margin-bottom:8px;">Methodology</div>
-      <div style="font-size:0.88em; color:#555; margin-bottom:4px; font-style:italic;">Conditional</div>
-      <div style="font-size:0.88em; color:#444; line-height:1.5; margin-bottom:10px;">
-        GARCH(1,1) &rarr; POT/GPD via MCMC &rarr; VaR/ES with credible intervals
-        &rarr; 10-day FHS simulation &rarr; Rolling backtest (Kupiec + Christoffersen)
-      </div>
-      <div style="font-size:0.88em; color:#555; margin-bottom:4px; font-style:italic;">Unconditional</div>
-      <div style="font-size:0.88em; color:#444; line-height:1.5;">
-        Raw log-losses &rarr; POT/GPD via MCMC &rarr; Return levels (1–50 years)
-      </div>
-    </div>
+::: {.column width="33%"}
+**Approach**
 
-    <div>
-      <div style="font-weight:600; color:#333; margin-bottom:8px;">Key Results</div>
-      <table style="font-size:0.88em; width:100%; border-collapse:collapse; color:#444;">
-        <tr>
-          <td style="padding:3px 0; color:#666;">Violation rate</td>
-          <td style="text-align:right; font-weight:600;">1.03% &nbsp;(nom. 1%)</td>
-        </tr>
-        <tr>
-          <td style="padding:3px 0; color:#666;">Kupiec</td>
-          <td style="text-align:right;">p = 0.77 &nbsp;✓</td>
-        </tr>
-        <tr>
-          <td style="padding:3px 0; color:#666;">Christoffersen (ind.)</td>
-          <td style="text-align:right;">p = 0.034 &nbsp;✗</td>
-        </tr>
-        <tr>
-          <td style="padding:3px 0; color:#666;">Conditional coverage</td>
-          <td style="text-align:right;">p = 0.10 &nbsp;✓</td>
-        </tr>
-        <tr style="border-top:1px solid #ddd;">
-          <td style="padding:6px 0 3px; color:#666;">10-day VaR (MC)</td>
-          <td style="text-align:right; font-weight:600;">6.46%</td>
-        </tr>
-        <tr>
-          <td style="padding:3px 0; color:#666;">10-day VaR (√t rule)</td>
-          <td style="text-align:right;">7.03% &nbsp;(+9%)</td>
-        </tr>
-      </table>
-    </div>
+GARCH(1,1) volatility prefilter, then Peaks-over-Threshold (GPD) on the
+standardized residuals — fit by MLE and Bayesian MCMC (`emcee`).
+:::
 
-  </div>
-</div>
+::: {.column width="33%"}
+**Headline Result**
+
+Conditional 99% VaR / ES with posterior credible intervals; evaluated
+out-of-sample on a rolling window over 10,691 observations.
+:::
+
+::: {.column width="33%"}
+**Validation**
+
+Violation rate 1.03% vs. 1% nominal. Kupiec p = 0.77, conditional
+coverage p = 0.10 — coverage not rejected.
+:::
+
+::::
+:::::
 
 ## Problem Statement and Objectives
 This project demonstrates two complementary approaches to tail risk estimation 
