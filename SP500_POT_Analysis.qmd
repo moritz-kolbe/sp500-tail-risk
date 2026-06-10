@@ -1,6 +1,10 @@
 ---
 title: "POT-Implementation - S&P500 - naive vs. whitened"
-format: html
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    toc-title: "Contents"
 ---
 ## Problem Statement and Objectives
 This project demonstrates two complementary approaches to tail risk estimation 
