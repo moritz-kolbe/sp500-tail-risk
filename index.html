@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.9.37">
+<meta name="generator" content="quarto-1.9.38">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -68,7 +68,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="SP500_POT_Analysis_files/libs/quarto-html/tippy.umd.min.js"></script>
 <script src="SP500_POT_Analysis_files/libs/quarto-html/anchor.min.js"></script>
 <link href="SP500_POT_Analysis_files/libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="SP500_POT_Analysis_files/libs/quarto-html/quarto-syntax-highlighting-7f8f88aac4f3542376d5c11b86a4c14d.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="SP500_POT_Analysis_files/libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="SP500_POT_Analysis_files/libs/bootstrap/bootstrap.min.js"></script>
 <link href="SP500_POT_Analysis_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="SP500_POT_Analysis_files/libs/bootstrap/bootstrap-138a6193a3bd40baf1e627da441a4734.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
@@ -105,10 +105,41 @@ window.Quarto = {
 
 </head>
 
-<body class="fullcontent quarto-light">
+<body class="quarto-light">
 
 <div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
-
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Contents</h2>
+   
+  <ul>
+  <li><a href="#problem-statement-and-objectives" id="toc-problem-statement-and-objectives" class="nav-link active" data-scroll-target="#problem-statement-and-objectives">Problem Statement and Objectives</a></li>
+  <li><a href="#preparation" id="toc-preparation" class="nav-link" data-scroll-target="#preparation">Preparation</a>
+  <ul class="collapse">
+  <li><a href="#package-loading" id="toc-package-loading" class="nav-link" data-scroll-target="#package-loading">Package-Loading</a></li>
+  <li><a href="#loading-data---sp500" id="toc-loading-data---sp500" class="nav-link" data-scroll-target="#loading-data---sp500">Loading Data - S&amp;P500</a></li>
+  </ul></li>
+  <li><a href="#volatility-filtered-pot-analysis---conditional-analysis" id="toc-volatility-filtered-pot-analysis---conditional-analysis" class="nav-link" data-scroll-target="#volatility-filtered-pot-analysis---conditional-analysis">Volatility-filtered POT-Analysis - Conditional Analysis</a>
+  <ul class="collapse">
+  <li><a href="#pre-whitening" id="toc-pre-whitening" class="nav-link" data-scroll-target="#pre-whitening">Pre-Whitening</a></li>
+  <li><a href="#choosing-the-threshold-u" id="toc-choosing-the-threshold-u" class="nav-link" data-scroll-target="#choosing-the-threshold-u">Choosing the Threshold <span class="math inline">\(u\)</span></a></li>
+  <li><a href="#pot-analysis" id="toc-pot-analysis" class="nav-link" data-scroll-target="#pot-analysis">POT Analysis</a></li>
+  <li><a href="#posterior-of-operatornamevar_0.99-and-operatornamees_0.99" id="toc-posterior-of-operatornamevar_0.99-and-operatornamees_0.99" class="nav-link" data-scroll-target="#posterior-of-operatornamevar_0.99-and-operatornamees_0.99">Posterior of <span class="math inline">\(\operatorname{VaR}_{0.99}\)</span> and <span class="math inline">\(\operatorname{ES}_{0.99}\)</span></a></li>
+  </ul></li>
+  <li><a href="#backtesting" id="toc-backtesting" class="nav-link" data-scroll-target="#backtesting">Backtesting</a>
+  <ul class="collapse">
+  <li><a href="#var-backtest" id="toc-var-backtest" class="nav-link" data-scroll-target="#var-backtest">VaR Backtest</a></li>
+  <li><a href="#es-backtest" id="toc-es-backtest" class="nav-link" data-scroll-target="#es-backtest">ES Backtest</a></li>
+  <li><a href="#day-forecast" id="toc-day-forecast" class="nav-link" data-scroll-target="#day-forecast">10-Day Forecast</a></li>
+  </ul></li>
+  <li><a href="#unfiltered-pot-analysis---unconditional-analysis" id="toc-unfiltered-pot-analysis---unconditional-analysis" class="nav-link" data-scroll-target="#unfiltered-pot-analysis---unconditional-analysis">Unfiltered POT-Analysis - Unconditional Analysis</a>
+  <ul class="collapse">
+  <li><a href="#calculating-return-levels" id="toc-calculating-return-levels" class="nav-link" data-scroll-target="#calculating-return-levels">Calculating return levels</a></li>
+  </ul></li>
+  <li><a href="#conclusion" id="toc-conclusion" class="nav-link" data-scroll-target="#conclusion">Conclusion</a></li>
+  </ul>
+</nav>
+</div>
 <main class="content" id="quarto-document-content">
 
 <header id="title-block-header" class="quarto-title-block default">
@@ -138,7 +169,7 @@ window.Quarto = {
 <h2 class="anchored" data-anchor-id="preparation">Preparation</h2>
 <section id="package-loading" class="level3">
 <h3 class="anchored" data-anchor-id="package-loading">Package-Loading</h3>
-<div id="469d3a60" class="cell" data-execution_count="1">
+<div id="05074c80" class="cell" data-execution_count="1">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pyextremes</span>
@@ -159,7 +190,7 @@ window.Quarto = {
 <section id="choice-of-sample-period" class="level4">
 <h4 class="anchored" data-anchor-id="choice-of-sample-period">Choice of Sample Period</h4>
 <p>I use daily S&amp;P 500 closing prices from 1980 onwards. There are two main reasons for this long sample window.</p>
-<div id="3b72003b" class="cell" data-execution_count="2">
+<div id="a8e4def8" class="cell" data-execution_count="2">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>prices <span class="op">=</span> yf.download(<span class="st">"^GSPC"</span>, start<span class="op">=</span><span class="st">"1980-01-01"</span>)[</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Close"</span></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>]  <span class="co"># on single stocks Adj.Close</span></span>
@@ -178,7 +209,9 @@ window.Quarto = {
 <span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stderr">
 <pre><code>
-[*********************100%***********************]  1 of 1 completed</code></pre>
+[*********************100%***********************]  1 of 1 completed
+/var/folders/94/d2dwh9nn7s75jjj78klfc9zr0000gn/T/ipykernel_74175/1807384140.py:4: FutureWarning: The default fill_method='pad' in DataFrame.pct_change is deprecated and will be removed in a future version. Either fill in any non-leading NA values prior to calling pct_change or specify 'fill_method=None' to not fill NA values.
+  returns_dec = prices.pct_change().dropna().squeeze()  # squeze for series format</code></pre>
 </div>
 <div class="cell-output cell-output-display">
 <div>
@@ -188,7 +221,7 @@ window.Quarto = {
 </div>
 </div>
 </div>
-<p>First, EVT relies on a sufficient number of tail observations. With roughly 46 years of daily data, the sample contains over 11,691 returns and several hundred exceedances even at high thresholds, which gives the GPD estimates a comfortable basis.</p>
+<p>First, EVT relies on a sufficient number of tail observations. With roughly 46 years of daily data, the sample contains over 11,703 returns and several hundred exceedances even at high thresholds, which gives the GPD estimates a comfortable basis.</p>
 <p>Second, the sample covers a wide range of structurally different crisis episodes — Black Monday (1987), the dot-com crash (2000–2002), the global financial crisis (2007–2009), the European sovereign debt crisis (2011), the COVID-19 shock (March 2020), and the 2022 inflation regime. This diversity makes the estimated tail behaviour less dependent on any single episode and arguably more representative of the kinds of extremes a risk manager has to anticipate.</p>
 <p>The main caveat is stationarity: over a window of this length, market microstructure, regulation, and the index composition itself have changed substantially, so strict stationarity is implausible for the raw return series. The GARCH pre-whitening step addresses part of this concern by absorbing time-varying volatility into the conditional variance, leaving the standardised residuals as the object on which the (much weaker) stationarity assumption is then imposed.</p>
 </section>
@@ -204,7 +237,7 @@ window.Quarto = {
 X_t = \sigma_t Z_t, \qquad \sigma_t^2 = \alpha_0 + \sum_{i=1}^{p} \alpha_i X_{t-i}^2 + \sum_{j=1}^{q} \beta_j \sigma_{t-j}^2.
 \]</span></p>
 <p>The basic idea is that periods of high volatility persist through large values of either <span class="math inline">\(|X_{t-i}|\)</span> or <span class="math inline">\(\sigma_{t-j}\)</span>. I use a simple GARCH(1,1), where persistence enters through <span class="math inline">\(|X_{t-1}|\)</span> and <span class="math inline">\(\sigma_{t-1}\)</span> only. Note that this does not restrict persistence to a single lag: through the recursive structure of <span class="math inline">\(\sigma_t^2\)</span>, shocks from much earlier periods continue to propagate via <span class="math inline">\(\sigma_{t-1}\)</span>.</p>
-<div id="799fc445" class="cell" data-execution_count="3">
+<div id="83a3541a" class="cell" data-execution_count="3">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>garch <span class="op">=</span> arch_model(returns_dec<span class="op">*</span><span class="dv">100</span>, vol<span class="op">=</span><span class="st">'GARCH'</span>, p<span class="op">=</span><span class="dv">1</span>, q<span class="op">=</span><span class="dv">1</span>)</span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> garch.fit(disp<span class="op">=</span><span class="st">'off'</span>)</span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>std_resid <span class="op">=</span> result.resid <span class="op">/</span> result.conditional_volatility</span>
@@ -216,7 +249,7 @@ X_t = \sigma_t Z_t, \qquad \sigma_t^2 = \alpha_0 + \sum_{i=1}^{p} \alpha_i X_{t-
 <section id="choosing-the-threshold-u" class="level3">
 <h3 class="anchored" data-anchor-id="choosing-the-threshold-u">Choosing the Threshold <span class="math inline">\(u\)</span></h3>
 <p>For the choice of the threshold <span class="math inline">\(u\)</span>, I use <code>plot_mean_residual_life</code> and <code>plot_parameter_stability</code> from the <code>pyextremes</code> package.</p>
-<div id="3aa01871" class="cell" data-execution_count="4">
+<div id="7a09714a" class="cell" data-execution_count="4">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>pyextremes.plot_mean_residual_life(losses)</span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-display">
@@ -232,7 +265,7 @@ E[X - u \mid X &gt; u] = \frac{\sigma_u + \xi u}{1 - \xi}.
 \]</span></p>
 <p>The mean-residual-life plot should therefore become approximately linear above a valid threshold. Here, linearity roughly holds for <span class="math inline">\(u \gtrsim 2.0\)</span>. Beyond <span class="math inline">\(u \approx 3.0\)</span>, the estimate becomes erratic and the confidence bands widen substantially, reflecting the small number of exceedances at such high levels. This suggests a threshold somewhere in the interval <span class="math inline">\([2.0, 3.0]\)</span>.</p>
 <p>To narrow this down, I check whether the GPD parameters are stable in this range. Under a correctly specified GPD above <span class="math inline">\(u\)</span>, the shape <span class="math inline">\(\xi\)</span> should be constant, and so should the modified scale <span class="math inline">\(\sigma^{*} = \sigma_u - \xi u\)</span> (the scale <span class="math inline">\(\sigma_u\)</span> itself is expected to vary linearly with <span class="math inline">\(u\)</span> and is therefore not a useful stability criterion).</p>
-<div id="cf973831" class="cell" data-execution_count="5">
+<div id="d24fd9a2" class="cell" data-execution_count="5">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>pyextremes.plot_parameter_stability(losses)</span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-display">
@@ -244,24 +277,24 @@ E[X - u \mid X &gt; u] = \frac{\sigma_u + \xi u}{1 - \xi}.
 </div>
 </div>
 <p>Both parameters are reasonably stable for <span class="math inline">\(u \in [2.0, 2.5]\)</span>; beyond that, the variance of the estimators grows noticeably, likely due to the decreasing number of exceedances. The admissible range is thus <span class="math inline">\(u \in [2.0, 2.5]\)</span>. Before fixing <span class="math inline">\(u\)</span>, I check the number of exceedances at a few candidate levels:</p>
-<div id="4f97981c" class="cell" data-execution_count="6">
+<div id="43636064" class="cell" data-execution_count="6">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exceedances at u = 2: </span><span class="sc">{</span>np<span class="sc">.</span><span class="bu">sum</span>(losses <span class="op">&gt;</span> <span class="fl">2.0</span>)<span class="sc">}</span><span class="ss">"</span>)</span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exceedances at u = 2.2: </span><span class="sc">{</span>np<span class="sc">.</span><span class="bu">sum</span>(losses <span class="op">&gt;</span> <span class="fl">2.2</span>)<span class="sc">}</span><span class="ss">"</span>)</span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>n_exceed_u <span class="op">=</span> <span class="bu">int</span>(np.<span class="bu">sum</span>(losses <span class="op">&gt;</span> <span class="fl">2.2</span>))</span>
 <span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exceedances at u = 2.5: </span><span class="sc">{</span>np<span class="sc">.</span><span class="bu">sum</span>(losses <span class="op">&gt;</span> <span class="fl">2.5</span>)<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>Exceedances at u = 2: 370
-Exceedances at u = 2.2: 271
+<pre><code>Exceedances at u = 2: 371
+Exceedances at u = 2.2: 272
 Exceedances at u = 2.5: 164</code></pre>
 </div>
 </div>
-<p>With roughly 271 exceedances at <span class="math inline">\(u = 2.2\)</span>, the sample size is comfortable for GPD estimation while the threshold still lies within the range supported by the diagnostics.</p>
+<p>With roughly 272 exceedances at <span class="math inline">\(u = 2.2\)</span>, the sample size is comfortable for GPD estimation while the threshold still lies within the range supported by the diagnostics.</p>
 </section>
 <section id="pot-analysis" class="level3">
 <h3 class="anchored" data-anchor-id="pot-analysis">POT Analysis</h3>
 <p>I now fit a POT model to the standardised residuals from the GARCH filter, again using <code>pyextremes</code>. Parameter estimation is performed via MCMC using the <code>emcee</code> sampler, which provides the full posterior distribution of <span class="math inline">\((\xi, \sigma_u)\)</span> rather than only point estimates. This allows for a proper quantification of parameter uncertainty and for constructing credible intervals on derived risk measures such as <span class="math inline">\(\operatorname{VaR}_\alpha\)</span> and <span class="math inline">\(\operatorname{ES}_\alpha\)</span>. A Bayesian approach is also attractive here because GPD maximum likelihood estimates are known to have poor finite-sample properties, especially when <span class="math inline">\(\xi\)</span> is small or negative.</p>
 <p>Sampling is parallelised across the 200 walkers of the emcee ensemble using <code>Pool</code> from the <code>multiprocessing</code> package. The number of worker processes should be set according to the available CPU cores on your machine.</p>
-<div id="a2d23081" class="cell" data-execution_count="7">
+<div id="ad43eba0" class="cell" data-execution_count="7">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> EVA(data<span class="op">=</span>losses)</span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>model.get_extremes(method<span class="op">=</span><span class="st">"POT"</span>, threshold<span class="op">=</span><span class="fl">2.2</span>)</span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> Pool(<span class="dv">10</span>) <span class="im">as</span> pool:  <span class="co"># Adjust n_workers to the number of available CPU cores</span></span>
@@ -274,7 +307,7 @@ Exceedances at u = 2.5: 164</code></pre>
 <span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>    )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <p>Having fitted the model, I look at the diagnostic plots and check whether the assumption of the model match the data.</p>
-<div id="f2039e93" class="cell" data-execution_count="8">
+<div id="250c22a5" class="cell" data-execution_count="8">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>model.plot_diagnostic()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-display" data-execution_count="8">
 <pre><code>(&lt;Figure size 768x768 with 4 Axes&gt;,
@@ -286,7 +319,7 @@ Exceedances at u = 2.5: 164</code></pre>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="SP500_POT_Analysis_files/figure-html/cell-9-output-2.png" width="665" height="669" class="figure-img"></p>
+<p><img src="SP500_POT_Analysis_files/figure-html/cell-9-output-2.png" width="649" height="669" class="figure-img"></p>
 </figure>
 </div>
 </div>
@@ -295,7 +328,7 @@ Exceedances at u = 2.5: 164</code></pre>
 <p>The P-P plot is almost perfect (<span class="math inline">\(R^2 = 1.000\)</span>), but this is of limited diagnostic value for extreme value models: P-P plots compress the tails, so they are insensitive to exactly the region that matters most here. The Q-Q plot is the more informative diagnostic. The reported <span class="math inline">\(p\)</span>-values refer to the significance of the correlation between empirical and theoretical quantiles/probabilities (so <span class="math inline">\(p = 0.000\)</span> indicates a highly significant linear relationship, not rejection of the fit).</p>
 <p>Overall, the model appears adequate for risk measurement at moderately extreme quantiles, with the caveat that individual outliers beyond the bulk of the tail may be underestimated.</p>
 <p>Next, I check for anomalies in chain mixing and inspect the posterior distribution of the parameters.</p>
-<div id="f2484455" class="cell" data-execution_count="9">
+<div id="47b901c0" class="cell" data-execution_count="9">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>model.plot_trace()</span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>model.plot_corner()</span>
 <span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -345,7 +378,7 @@ Exceedances at u = 2.5: 164</code></pre>
 \]</span></p>
 <p>where the condition <span class="math inline">\(\xi &lt; 1\)</span> ensures that <span class="math inline">\(\operatorname{ES}_\alpha\)</span> is finite. With <span class="math inline">\(\hat{\xi} \approx 0.25\)</span> this is comfortably satisfied.</p>
 <p>Since the model was estimated via <code>emcee</code>, I propagate the full posterior of <span class="math inline">\((\xi, \beta)\)</span> through both formulas instead of relying on point estimates only, which allows uncertainty to be reflected in credible intervals for <span class="math inline">\(\operatorname{VaR}_\alpha\)</span> and <span class="math inline">\(\operatorname{ES}_\alpha\)</span>.</p>
-<div id="5a9add0f" class="cell" data-execution_count="10">
+<div id="63797daf" class="cell" data-execution_count="10">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>u <span class="op">=</span> <span class="fl">2.2</span></span>
 <span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>n_u <span class="op">=</span> <span class="bu">len</span>(model.extremes)</span>
 <span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>n <span class="op">=</span> <span class="bu">len</span>(losses)</span>
@@ -375,8 +408,8 @@ Exceedances at u = 2.5: 164</code></pre>
 <span id="cb14-27"><a href="#cb14-27" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>np<span class="sc">.</span>percentile(ES_posterior, <span class="fl">97.5</span>)<span class="sc">:.2f}</span><span class="ss">%]"</span></span>
 <span id="cb14-28"><a href="#cb14-28" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>Next-day VaR_0.99: 2.15% [2.09%, 2.22%]
-Next-day ES_0.99: 2.87% [2.70%, 3.16%]</code></pre>
+<pre><code>Next-day VaR_0.99: 2.60% [2.53%, 2.68%]
+Next-day ES_0.99: 3.48% [3.27%, 3.83%]</code></pre>
 </div>
 </div>
 </section>
@@ -396,7 +429,7 @@ Next-day ES_0.99: 2.87% [2.70%, 3.16%]</code></pre>
 <p>This produces a sequence of out-of-sample VaR forecasts and corresponding violation indicators that can be evaluated with standard backtesting procedures (Kupiec, Christoffersen).</p>
 <p>A few design choices deserve comment. The rolling window of 1000 days (~4 trading years) balances estimation stability against responsiveness to changing market regimes. The threshold is set to the rolling 95% quantile rather than a fixed value, since the scale of the standardised residuals can drift slightly between windows. GPD parameters are estimated by MLE rather than MCMC: with several thousand re-fits, full Bayesian inference would be computationally prohibitive, and only the point estimate of <span class="math inline">\(\text{VaR}^z\)</span> is needed to determine whether a violation occurred. Iterations with fewer than 20 exceedances are flagged as missing and excluded from the evaluation. Computation is parallelised across cores using <code>multiprocessing.Pool</code>; the worker initialiser pattern is required on macOS where the spawn start method does not inherit module-level state.</p>
 <p>The rolling-window logic is implemented in <code>VaR_backtest_utils.py</code> (see repository); the cell below executes the backtest.</p>
-<div id="f6716f19" class="cell" data-execution_count="11">
+<div id="24de562f" class="cell" data-execution_count="11">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>window <span class="op">=</span> <span class="dv">1000</span></span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> Pool(</span>
 <span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    <span class="dv">10</span>,</span>
@@ -420,7 +453,7 @@ Next-day ES_0.99: 2.87% [2.70%, 3.16%]</code></pre>
 </div>
 <section id="results" class="level4">
 <h4 class="anchored" data-anchor-id="results">Results</h4>
-<div id="d40491c8" class="cell" data-execution_count="12">
+<div id="39e5a92f" class="cell" data-execution_count="12">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>n_obs <span class="op">=</span> <span class="bu">len</span>(violations_clean)</span>
 <span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>n_viol <span class="op">=</span> violations_clean.<span class="bu">sum</span>()</span>
 <span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Violations: </span><span class="sc">{</span>n_viol<span class="sc">}</span><span class="ss">/</span><span class="sc">{</span>n_obs<span class="sc">}</span><span class="ss"> (</span><span class="sc">{</span>n_viol <span class="op">/</span> n_obs<span class="sc">:.4f}</span><span class="ss">)"</span>)</span>
@@ -484,11 +517,11 @@ Next-day ES_0.99: 2.87% [2.70%, 3.16%]</code></pre>
 <span id="cb17-61"><a href="#cb17-61" aria-hidden="true" tabindex="-1"></a>end_year <span class="op">=</span> dates_test[<span class="op">-</span><span class="dv">1</span>].year</span>
 <span id="cb17-62"><a href="#cb17-62" aria-hidden="true" tabindex="-1"></a>n_years_bt <span class="op">=</span> end_year <span class="op">-</span> start_year</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>Violations: 110/10691 (0.0103)
+<pre><code>Violations: 111/10703 (0.0104)
 Expected: 107 (0.01)
-Kupiec: LR=0.089, p=0.7650
-Christoffersen Ind: LR=4.516, p=0.0336
-Christoffersen CC:  LR=4.606, p=0.1000</code></pre>
+Kupiec: LR=0.147, p=0.7015
+Christoffersen Ind: LR=4.416, p=0.0356
+Christoffersen CC:  LR=4.563, p=0.1021</code></pre>
 </div>
 <div class="cell-output cell-output-display">
 <div>
@@ -501,17 +534,17 @@ Christoffersen CC:  LR=4.606, p=0.1000</code></pre>
 </section>
 <section id="discussion" class="level4">
 <h4 class="anchored" data-anchor-id="discussion">Discussion</h4>
-<p>The backtest covers 10,691 out-of-sample days from 1983 to 2026, with np.int64(110) recorded violations of the 99% <span class="math inline">\(\text{VaR}\)</span>.</p>
-<p><strong>Unconditional coverage.</strong> With an empirical violation rate of 1.03% against a nominal 1%, the Kupiec test does not reject the null of correct unconditional coverage (<span class="math inline">\(LR =\)</span> 0.09, <span class="math inline">\(p =\)</span> 0.76). The conditional EVT model produces almost exactly the right number of tail violations over four decades, including periods as different as the 1987 crash, the dot-com era, the global financial crisis, the eurozone crisis, and the COVID-19 shock.</p>
-<p><strong>Independence.</strong> The Christoffersen independence test rejects the null at the 5% level (<span class="math inline">\(LR =\)</span> 4.52, <span class="math inline">\(p =\)</span> 0.034). Visual inspection of the violation series confirms this: violations cluster around major crisis periods, particularly 1987, 1998 (LTCM/Asian crisis), 2007–2009, and March 2020. Although GARCH(1,1) substantially reduces volatility-induced clustering relative to a static model, residual dependence remains — likely because GARCH(1,1) does not capture the leverage effect, assumes Gaussian innovations even though the standardised residuals are clearly heavy-tailed, and uses a rather simple lag structure.</p>
-<p><strong>Conditional coverage.</strong> The combined test does not reject at the 5% level (<span class="math inline">\(LR =\)</span> 4.61, <span class="math inline">\(p =\)</span> 0.10). Overall, the model captures the right number of tail events but with slightly clustered timing.</p>
+<p>The backtest covers 10,703 out-of-sample days from 1983 to 2026, with np.int64(111) recorded violations of the 99% <span class="math inline">\(\text{VaR}\)</span>.</p>
+<p><strong>Unconditional coverage.</strong> With an empirical violation rate of 1.04% against a nominal 1%, the Kupiec test does not reject the null of correct unconditional coverage (<span class="math inline">\(LR =\)</span> 0.15, <span class="math inline">\(p =\)</span> 0.70). The conditional EVT model produces almost exactly the right number of tail violations over four decades, including periods as different as the 1987 crash, the dot-com era, the global financial crisis, the eurozone crisis, and the COVID-19 shock.</p>
+<p><strong>Independence.</strong> The Christoffersen independence test rejects the null at the 5% level (<span class="math inline">\(LR =\)</span> 4.42, <span class="math inline">\(p =\)</span> 0.036). Visual inspection of the violation series confirms this: violations cluster around major crisis periods, particularly 1987, 1998 (LTCM/Asian crisis), 2007–2009, and March 2020. Although GARCH(1,1) substantially reduces volatility-induced clustering relative to a static model, residual dependence remains — likely because GARCH(1,1) does not capture the leverage effect, assumes Gaussian innovations even though the standardised residuals are clearly heavy-tailed, and uses a rather simple lag structure.</p>
+<p><strong>Conditional coverage.</strong> The combined test does not reject at the 5% level (<span class="math inline">\(LR =\)</span> 4.56, <span class="math inline">\(p =\)</span> 0.10). Overall, the model captures the right number of tail events but with slightly clustered timing.</p>
 <p><strong>Practical assessment.</strong> From a risk-management perspective the result is encouraging: a violation rate close to the nominal level over a 43-year out-of-sample window is a strong outcome, especially considering that the model was estimated on rolling windows of only 1000 days and never had access to future information. The clustering of violations is a real but interpretable limitation. Natural refinements that should reduce it are an asymmetric GARCH specification (e.g.&nbsp;GJR-GARCH or EGARCH) and a heavier-tailed innovation distribution (Student-<span class="math inline">\(t\)</span> or skewed-<span class="math inline">\(t\)</span>). Both are straightforward extensions and will be explored in follow-up work.</p>
 </section>
 </section>
 <section id="es-backtest" class="level3">
 <h3 class="anchored" data-anchor-id="es-backtest">ES Backtest</h3>
-<p>Since backtesting is conducted at the 99% level, only np.int64(110) violation days are available for <span class="math inline">\(\text{ES}\)</span> evaluation. I test whether the exceedance residuals <span class="math inline">\(K_{t+1} = (L_{t+1} - \widehat{ES}_t^\alpha) / \widehat{ES}_t^\alpha\)</span> have mean zero using a one-sample t-test</p>
-<div id="08308f0c" class="cell" data-execution_count="13">
+<p>Since backtesting is conducted at the 99% level, only np.int64(111) violation days are available for <span class="math inline">\(\text{ES}\)</span> evaluation. I test whether the exceedance residuals <span class="math inline">\(K_{t+1} = (L_{t+1} - \widehat{ES}_t^\alpha) / \widehat{ES}_t^\alpha\)</span> have mean zero using a one-sample t-test</p>
+<div id="789f7ffc" class="cell" data-execution_count="13">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>exceedance_residuals <span class="op">=</span> (</span>
 <span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>    actual_losses[violations_clean] <span class="op">-</span> es_clean[violations_clean]</span>
 <span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>) <span class="op">/</span> es_clean[violations_clean]</span>
@@ -522,16 +555,16 @@ Christoffersen CC:  LR=4.606, p=0.1000</code></pre>
 <span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>es_estimated <span class="op">=</span> es_clean[violations_clean].mean()</span>
 <span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>difference <span class="op">=</span> (es_empirical<span class="op">-</span>es_estimated)<span class="op">*</span><span class="dv">100</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>1.7902121476853319
-0.07619609335937622</code></pre>
+<pre><code>1.7955848772534468
+0.07530610616213479</code></pre>
 </div>
 </div>
-<p>The null hypothesis of mean-zero residuals is not rejected at the 5% level (<span class="math inline">\(t =\)</span> 1.790, <span class="math inline">\(p =\)</span> 0.0762). The estimated ES falls short of the empirical mean loss on violation days by roughly 0.23 percentage points, but this underestimation is not statistically significant.</p>
+<p>The null hypothesis of mean-zero residuals is not rejected at the 5% level (<span class="math inline">\(t =\)</span> 1.796, <span class="math inline">\(p =\)</span> 0.0753). The estimated ES falls short of the empirical mean loss on violation days by roughly 0.23 percentage points, but this underestimation is not statistically significant.</p>
 </section>
 <section id="day-forecast" class="level3">
 <h3 class="anchored" data-anchor-id="day-forecast">10-Day Forecast</h3>
 <p>Standard scaling (<code>VaR_z · σ_h</code>) implicitly assumes that the <em>h</em>-day standardised return has the same distribution as the 1-day innovation. Under iid-like residuals this is fine for the daily VaR path (each horizon is still a 1-day quantile, only σh_h σh​ changes), but not for the cumulative 10-day loss: a sum of hh h heavy-tailed variables drifts toward a thinner-tailed limit (CLT), so cumulative scaling overstates the true tail. To handle this consistently I simulate forward paths using HS-GARCH-EVT approach (McNeil &amp; Frey, 2000): the GARCH(1,1) recursion is propagated with innovations drawn from the empirical residual distribution below the threshold and from the fitted GPD above it. This gives both the daily VaR/ES path and the proper 10-day aggregate distribution, and lets me read off the comparison to naive scaling directly. For comparison, the naive square-root-of-time scaling rule is included. As expected, it systematically overstates both VaR and ES.</p>
-<div id="b6a8bb76" class="cell" data-execution_count="14">
+<div id="3329904b" class="cell" data-execution_count="14">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> simulate_garch_evt(</span>
 <span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>    garch_result, std_resid, threshold, xi, sigma_gpd,</span>
 <span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>    horizon<span class="op">=</span><span class="dv">10</span>, n_sims<span class="op">=</span><span class="dv">20_000</span>, seed<span class="op">=</span><span class="dv">42</span>,</span>
@@ -603,8 +636,8 @@ Christoffersen CC:  LR=4.606, p=0.1000</code></pre>
 <span id="cb22-29"><a href="#cb22-29" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"10-day VaR</span><span class="sc">{</span>alpha<span class="sc">:.0%}</span><span class="ss">  | MC: </span><span class="sc">{</span>var_cum_mc<span class="sc">:5.2f}</span><span class="ss">%   scaling: </span><span class="sc">{</span>var_cum_scaled<span class="sc">:5.2f}</span><span class="ss">%"</span>)</span>
 <span id="cb22-30"><a href="#cb22-30" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"10-day ES</span><span class="sc">{</span>alpha<span class="sc">:.0%}</span><span class="ss">   | MC: </span><span class="sc">{</span>es_cum_mc<span class="sc">:5.2f}</span><span class="ss">%   scaling: </span><span class="sc">{</span>es_cum_scaled<span class="sc">:5.2f}</span><span class="ss">%"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>10-day VaR99%  | MC:  6.46%   scaling:  7.03%
-10-day ES99%   | MC:  8.54%   scaling:  9.39%</code></pre>
+<pre><code>10-day VaR99%  | MC:  7.78%   scaling:  8.31%
+10-day ES99%   | MC:  9.97%   scaling: 11.11%</code></pre>
 </div>
 </div>
 <div id="cell-mc-plot" class="cell" data-execution_count="16">
@@ -673,8 +706,8 @@ Christoffersen CC:  LR=4.606, p=0.1000</code></pre>
 <span id="cb25-23"><a href="#cb25-23" aria-hidden="true" tabindex="-1"></a>      <span class="ss">f"</span><span class="sc">{</span>var_cum_bayes<span class="sc">:.2f}</span><span class="ss">%  CI95 [</span><span class="sc">{</span>ci[<span class="dv">0</span>]<span class="sc">:.2f}</span><span class="ss">%, </span><span class="sc">{</span>ci[<span class="dv">1</span>]<span class="sc">:.2f}</span><span class="ss">%]"</span>)</span>
 <span id="cb25-24"><a href="#cb25-24" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"10-day ES</span><span class="sc">{</span>alpha<span class="sc">:.0%}</span><span class="ss">  (Bayesian predictive): </span><span class="sc">{</span>es_cum_bayes<span class="sc">:.2f}</span><span class="ss">%"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>10-day VaR99% (Bayesian predictive): 6.59%  CI95 [5.78%, 7.42%]
-10-day ES99%  (Bayesian predictive): 8.78%</code></pre>
+<pre><code>10-day VaR99% (Bayesian predictive): 7.84%  CI95 [6.97%, 8.77%]
+10-day ES99%  (Bayesian predictive): 10.48%</code></pre>
 </div>
 </div>
 </section>
@@ -687,7 +720,7 @@ Christoffersen CC:  LR=4.606, p=0.1000</code></pre>
 \]</span></p>
 <p>which can be read directly from the fitted GPD via the standard POT formula.</p>
 <p>The fitting procedure mirrors the conditional analysis exactly; I therefore restrict the commentary to features specific to the unconditional setting.</p>
-<div id="4bfd02da" class="cell" data-execution_count="18">
+<div id="5a618a1d" class="cell" data-execution_count="18">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>pyextremes.plot_mean_residual_life(log_losses)</span>
 <span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>pyextremes.plot_parameter_stability(log_losses)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-display" data-execution_count="18">
@@ -710,19 +743,19 @@ Christoffersen CC:  LR=4.606, p=0.1000</code></pre>
 </div>
 </div>
 <p>A notable difference from the conditional analysis is the instability of the GPD parameter estimates. The parameter stability plot reveals no clear region where both <span class="math inline">\(\xi\)</span> and <span class="math inline">\(\sigma^*\)</span> stabilise simultaneously, making threshold selection considerably more difficult. This is a direct consequence of the volatility clustering present in raw log-losses: since large losses tend to occur in bursts, the tail behaviour of the unfiltered series is less well described by a stationary GPD than that of the GARCH residuals.</p>
-<div id="c0fbc47e" class="cell" data-execution_count="19">
+<div id="f1682307" class="cell" data-execution_count="19">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exceedances at u=0.02: </span><span class="sc">{</span>np<span class="sc">.</span><span class="bu">sum</span>(log_losses <span class="op">&gt;</span> <span class="fl">0.02</span>)<span class="sc">}</span><span class="ss">"</span>)</span>
 <span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exceedances at u=0.0225: </span><span class="sc">{</span>np<span class="sc">.</span><span class="bu">sum</span>(log_losses <span class="op">&gt;</span> <span class="fl">0.0225</span>)<span class="sc">}</span><span class="ss">"</span>)</span>
 <span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Exceedances at u=0.024: </span><span class="sc">{</span>np<span class="sc">.</span><span class="bu">sum</span>(log_losses <span class="op">&gt;</span> <span class="fl">0.024</span>)<span class="sc">}</span><span class="ss">"</span>)</span>
 <span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>n_exceed_u_2 <span class="op">=</span> <span class="bu">int</span>(np.<span class="bu">sum</span>(log_losses <span class="op">&gt;</span> <span class="fl">0.024</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>Exceedances at u=0.02: 379
-Exceedances at u=0.0225: 293
-Exceedances at u=0.024: 241</code></pre>
+<pre><code>Exceedances at u=0.02: 380
+Exceedances at u=0.0225: 294
+Exceedances at u=0.024: 242</code></pre>
 </div>
 </div>
-<p>Despite the instability in the parameter plots, the exceedance count of 241 at <span class="math inline">\(u = 0.024\)</span> provides a sufficient basis for GPD estimation, and I proceed with this threshold.</p>
-<div id="ca068652" class="cell" data-execution_count="20">
+<p>Despite the instability in the parameter plots, the exceedance count of 242 at <span class="math inline">\(u = 0.024\)</span> provides a sufficient basis for GPD estimation, and I proceed with this threshold.</p>
+<div id="4e393855" class="cell" data-execution_count="20">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> EVA(data<span class="op">=</span>log_losses)</span>
 <span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>model.get_extremes(method<span class="op">=</span><span class="st">"POT"</span>, threshold<span class="op">=</span><span class="fl">0.024</span>)</span>
 <span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -751,14 +784,14 @@ Exceedances at u=0.024: 241</code></pre>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="SP500_POT_Analysis_files/figure-html/cell-21-output-2.png" width="683" height="354" class="figure-img"></p>
+<p><img src="SP500_POT_Analysis_files/figure-html/cell-21-output-2.png" width="672" height="354" class="figure-img"></p>
 </figure>
 </div>
 </div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="SP500_POT_Analysis_files/figure-html/cell-21-output-3.png" width="692" height="651" class="figure-img"></p>
+<p><img src="SP500_POT_Analysis_files/figure-html/cell-21-output-3.png" width="686" height="651" class="figure-img"></p>
 </figure>
 </div>
 </div>
@@ -767,7 +800,7 @@ Exceedances at u=0.024: 241</code></pre>
 <section id="calculating-return-levels" class="level3">
 <h3 class="anchored" data-anchor-id="calculating-return-levels">Calculating return levels</h3>
 <p>Using the posterior distribution of <span class="math inline">\((\xi, \sigma)\)</span>, return levels are computed by substituting the <span class="math inline">\(T\)</span>-year confidence level into the standard POT formula, for <span class="math inline">\(T \in \{1, 5, 10, 20, 50\}\)</span> years.</p>
-<div id="1743e6cf" class="cell" data-execution_count="21">
+<div id="5277d748" class="cell" data-execution_count="21">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>u <span class="op">=</span> <span class="fl">0.024</span></span>
 <span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>n_u <span class="op">=</span> <span class="bu">len</span>(model.extremes)  </span>
 <span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>n <span class="op">=</span> <span class="bu">len</span>(log_losses)</span>
@@ -792,14 +825,14 @@ Exceedances at u=0.024: 241</code></pre>
 <span id="cb32-22"><a href="#cb32-22" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"[</span><span class="sc">{</span>(<span class="dv">1</span> <span class="op">-</span> np.exp(<span class="op">-</span>ci_lower)) <span class="op">*</span> <span class="dv">100</span><span class="sc">:.2f}</span><span class="ss">%, "</span></span>
 <span id="cb32-23"><a href="#cb32-23" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>(<span class="dv">1</span> <span class="op">-</span> np.exp(<span class="op">-</span>ci_upper)) <span class="op">*</span> <span class="dv">100</span><span class="sc">:.2f}</span><span class="ss">%]"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>1-year VaR_1: 4.10% [3.84%, 4.44%]
-5-year VaR_5: 7.10% [6.14%, 8.78%]
-10-year VaR_10: 8.95% [7.36%, 12.02%]
-20-year VaR_20: 11.25% [8.74%, 16.55%]
-50-year VaR_50: 15.14% [10.83%, 25.17%]</code></pre>
+<pre><code>1-year VaR_1: 4.10% [3.83%, 4.43%]
+5-year VaR_5: 7.09% [6.14%, 8.81%]
+10-year VaR_10: 8.95% [7.38%, 12.09%]
+20-year VaR_20: 11.27% [8.78%, 16.70%]
+50-year VaR_50: 15.19% [10.89%, 25.45%]</code></pre>
 </div>
 </div>
-<div id="9af2a13e" class="cell" data-execution_count="22">
+<div id="6d5e71d4" class="cell" data-execution_count="22">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>T_values <span class="op">=</span> [<span class="dv">1</span>, <span class="dv">5</span>, <span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">50</span>]</span>
 <span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>medians <span class="op">=</span> [np.median(results_naive[T]) <span class="cf">for</span> T <span class="kw">in</span> T_values]</span>
 <span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>ci_lower <span class="op">=</span> [np.percentile(results_naive[T], <span class="fl">2.5</span>) <span class="cf">for</span> T <span class="kw">in</span> T_values]</span>
@@ -834,7 +867,7 @@ Exceedances at u=0.024: 241</code></pre>
 <h2 class="anchored" data-anchor-id="conclusion">Conclusion</h2>
 <p>As McNeil &amp; Frey (2000) demonstrated, conditional and unconditional POT analysis are not competing approaches but complementary ones, as they address fundamentally different questions. The conditional model — combining GARCH pre-filtering with GPD tail estimation — is suited for short-term risk management: it captures the current volatility regime and produces dynamic VaR and ES estimates that respond to changing market conditions. The unconditional model, applied directly to the raw log-loss series, is better suited for long-run tail characterisation via return levels, provided that the tail behaviour of the return series is sufficiently stable over the sample period — an assumption that is difficult to verify over a 46-year window but is at least partially mitigated by the use of a long sample that covers multiple structural regimes. .</p>
 <p>A further methodological contribution of this project is the use of Bayesian inference via MCMC rather than maximum likelihood estimation for the GPD parameters. Since different parameter values can have substantial consequences for risk measure estimates, propagating the full posterior distribution through the VaR and ES formulas provides a more honest account of estimation uncertainty than a single point estimate would.</p>
-<p>The rolling-window backtest over 43 years yields an empirical violation rate close to the nominal 1%, and the Kupiec test does not reject correct unconditional coverage (<span class="math inline">\(p =\)</span> 0.76). The main limitation is violation clustering: the Christoffersen independence test rejects at the 5% level (<span class="math inline">\(p =\)</span> 0.034), and the conditional coverage test is borderline (<span class="math inline">\(p =\)</span> 0.10). This residual dependence reflects the well-known limitations of GARCH(1,1) — its symmetric treatment of positive and negative shocks and its Gaussian innovation assumption — and motivates natural extensions such as GJR-GARCH or a Student-<span class="math inline">\(t\)</span> innovation distribution.</p>
+<p>The rolling-window backtest over 43 years yields an empirical violation rate close to the nominal 1%, and the Kupiec test does not reject correct unconditional coverage (<span class="math inline">\(p =\)</span> 0.70). The main limitation is violation clustering: the Christoffersen independence test rejects at the 5% level (<span class="math inline">\(p =\)</span> 0.036), and the conditional coverage test is borderline (<span class="math inline">\(p =\)</span> 0.10). This residual dependence reflects the well-known limitations of GARCH(1,1) — its symmetric treatment of positive and negative shocks and its Gaussian innovation assumption — and motivates natural extensions such as GJR-GARCH or a Student-<span class="math inline">\(t\)</span> innovation distribution.</p>
 </section>
 
 </main>
